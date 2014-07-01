@@ -411,6 +411,28 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////
 
+enum enumbRes {
+	ebResSelectBonDriver = 0,
+	ebResCreateBonDriver,
+	ebResOpenTuner,
+	ebResPurgeTsStream,
+	ebResSetLnbPower,
+	ebResNum,
+};
+
+enum enumdwRes {
+	edwResSetChannel2 = 0,
+	edwResGetTotalDeviceNum,
+	edwResGetActiveDeviceNum,
+	edwResNum,
+};
+
+enum enumpRes {
+	epResEnumTuningSpace = 0,
+	epResEnumChannelName,
+	epResNum,
+};
+
 class cProxyClient : public IBonDriver3 {
 	SOCKET m_s;
 //	HANDLE m_hThread;
@@ -421,11 +443,14 @@ class cProxyClient : public IBonDriver3 {
 	cPacketFifo m_fifoRecv;
 	cTSFifo m_fifoTS;
 	TS_DATA *m_LastBuff;
-	BOOL m_bRes;
-	DWORD m_dwRes;
+	cEvent m_bResEvent[ebResNum];
+	BOOL m_bRes[ebResNum];
+	cEvent m_dwResEvent[edwResNum];
+	DWORD m_dwRes[edwResNum];
+	cEvent m_pResEvent[epResNum];
+	TCHAR *m_pRes[epResNum];
 	DWORD m_dwBufPos;
 	TCHAR *m_pBuf[8];
-	TCHAR *m_pRes;
 	float m_fSignalLevel;
 	DWORD m_dwSpace;
 	DWORD m_dwChannel;
