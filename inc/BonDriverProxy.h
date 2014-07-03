@@ -283,6 +283,7 @@ class cProxyServer {
 	char m_strBonDriver[MAX_PATH];
 	BOOL m_bTunerOpen;
 	HANDLE m_hTsRead;
+	std::list<cProxyServer *> *m_pTsReceiversList;
 	BOOL * volatile m_pStopTsRead;
 	cCriticalSection *m_pTsLock;
 	DWORD *m_ppos;

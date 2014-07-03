@@ -449,7 +449,7 @@ BOOL cProxyClient::CreateBonDriver()
 	m_bResEvent[ebResCreateBonDriver].Wait();
 	{
 		LOCK(m_readLock);
-		if (m_bRes)
+		if (m_bRes[ebResCreateBonDriver])
 			m_bBonDriver = TRUE;
 		return m_bRes[ebResCreateBonDriver];
 	}
@@ -463,7 +463,7 @@ const BOOL cProxyClient::OpenTuner(void)
 	m_bResEvent[ebResOpenTuner].Wait();
 	{
 		LOCK(m_readLock);
-		if (m_bRes)
+		if (m_bRes[ebResOpenTuner])
 			m_bTuner = TRUE;
 		return m_bRes[ebResOpenTuner];
 	}
