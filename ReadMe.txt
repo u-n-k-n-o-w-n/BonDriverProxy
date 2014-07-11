@@ -88,8 +88,7 @@ x86の物しか提供されていません)と言う様な構成でも、x64版のBonDriver_Proxy.dllとx8
 
 // ライセンス
 MITライセンスとします。
-Copyright (c) 2014 unknown
-もちろんモロモロ無保証です。
+LICENSE.txt参照。
 
 // 謝辞
 拡張ツール中の人さんのIBonDriver*.hをincludeさせていただいています。
