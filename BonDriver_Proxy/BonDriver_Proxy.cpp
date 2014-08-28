@@ -7,7 +7,7 @@ static cCriticalSection Lock_Global;
 cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
 {
 	m_s = INVALID_SOCKET;
-	m_LastBuff = NULL;
+	m_LastBuf = NULL;
 	m_dwBufPos = 0;
 	::memset(m_pBuf, 0, sizeof(m_pBuf));
 	m_bBonDriver = m_bTuner = m_bRereased = FALSE;
@@ -37,17 +37,9 @@ cProxyClient::~cProxyClient()
 	{
 		LOCK(m_writeLock);
 		for (int i = 0; i < 8; i++)
-		{
-			if (m_pBuf[i] != NULL)
-				delete[] m_pBuf[i];
-		}
-		::memset(m_pBuf, 0, sizeof(m_pBuf));
+			delete[] m_pBuf[i];
 		TsFlush();
-		if (m_LastBuff != NULL)
-		{
-			delete m_LastBuff;
-			m_LastBuff = NULL;
-		}
+		delete m_LastBuf;
 	}
 
 	if (m_s != INVALID_SOCKET)
@@ -87,7 +79,7 @@ DWORD cProxyClient::Process()
 	m_SingleShot.Set();
 
 	HANDLE h[2] = { m_Error, m_fifoRecv.GetEventHandle() };
-	while (1)
+	for (;;)
 	{
 		DWORD dwRet = ::WaitForMultipleObjects(2, h, FALSE, INFINITE);
 		switch (dwRet)
@@ -141,10 +133,11 @@ DWORD cProxyClient::Process()
 						u.dw = ::ntohl(*(DWORD *)&(pPh->m_pPacket->payload[sizeof(DWORD)]));
 						m_fSignalLevel = u.f;
 
+						pPh->SetDeleteFlag(FALSE);
 						TS_DATA *pData = new TS_DATA();
 						pData->dwSize = dwSize;
-						pData->pbBuff = new BYTE[dwSize];
-						::memcpy(pData->pbBuff, &(pPh->m_pPacket->payload[sizeof(DWORD) * 2]), dwSize);
+						pData->pbBufHead = pPh->m_pBuf;
+						pData->pbBuf = &(pPh->m_pPacket->payload[sizeof(DWORD) * 2]);
 						m_fifoTS.Push(pData);
 					}
 				}
@@ -221,7 +214,7 @@ end:
 	return 0;
 }
 
-int cProxyClient::ReceiverHelper(char *pDst, int left)
+int cProxyClient::ReceiverHelper(char *pDst, DWORD left)
 {
 	int len, ret;
 	fd_set rd;
@@ -245,14 +238,10 @@ int cProxyClient::ReceiverHelper(char *pDst, int left)
 		if (len == 0)
 			continue;
 
-		if ((len = ::recv(m_s, pDst, left, 0)) == SOCKET_ERROR)
+		// MSDNのrecv()のソース例とか見る限り、"SOCKET_ERROR"が負の値なのは保証されてるっぽい
+		if ((len = ::recv(m_s, pDst, left, 0)) <= 0)
 		{
 			ret = -3;
-			goto err;
-		}
-		else if (len == 0)
-		{
-			ret = -4;
 			goto err;
 		}
 		left -= len;
@@ -267,15 +256,14 @@ err:
 DWORD WINAPI cProxyClient::Receiver(LPVOID pv)
 {
 	cProxyClient *pProxy = static_cast<cProxyClient *>(pv);
-	int left;
 	char *p;
-	DWORD ret;
+	DWORD left, ret;
 	cPacketHolder *pPh = NULL;
-	const DWORD TsPacketBufSize = g_TsPacketBufSize;
+	const DWORD MaxPacketBufSize = g_TsPacketBufSize + (sizeof(DWORD) * 2);
 
-	while (1)
+	for (;;)
 	{
-		pPh = new cPacketHolder(16);
+		pPh = new cPacketHolder(MaxPacketBufSize);
 		left = sizeof(stPacketHead);
 		p = (char *)&(pPh->m_pPacket->head);
 		if (pProxy->ReceiverHelper(p, left) != 0)
@@ -291,46 +279,31 @@ DWORD WINAPI cProxyClient::Receiver(LPVOID pv)
 			goto end;
 		}
 
-		left = (int)pPh->GetBodyLength();
+		left = pPh->GetBodyLength();
 		if (left == 0)
 		{
 			pProxy->m_fifoRecv.Push(pPh);
 			continue;
 		}
 
-		if ((!pPh->IsTS() && (left > 512)) || left < 0)
+		if (left > MaxPacketBufSize)
 		{
 			pProxy->m_Error.Set();
 			ret = 203;
 			goto end;
 		}
 
-		if (left >= 16)
-		{
-			if ((DWORD)left > (TsPacketBufSize + (sizeof(DWORD) * 2)))
-			{
-				pProxy->m_Error.Set();
-				ret = 204;
-				goto end;
-			}
-			cPacketHolder *pTmp = new cPacketHolder(left);
-			pTmp->m_pPacket->head = pPh->m_pPacket->head;
-			delete pPh;
-			pPh = pTmp;
-		}
-
 		p = (char *)(pPh->m_pPacket->payload);
 		if (pProxy->ReceiverHelper(p, left) != 0)
 		{
-			ret = 205;
+			ret = 204;
 			goto end;
 		}
 
 		pProxy->m_fifoRecv.Push(pPh);
 	}
 end:
-	if (pPh)
-		delete pPh;
+	delete pPh;
 	pProxy->m_iEndCount++;
 	return ret;
 }
@@ -388,7 +361,7 @@ DWORD WINAPI cProxyClient::Sender(LPVOID pv)
 	cProxyClient *pProxy = static_cast<cProxyClient *>(pv);
 	DWORD ret;
 	HANDLE h[2] = { pProxy->m_Error, pProxy->m_fifoSend.GetEventHandle() };
-	while (1)
+	for (;;)
 	{
 		DWORD dwRet = ::WaitForMultipleObjects(2, h, FALSE, INFINITE);
 		switch (dwRet)
@@ -482,15 +455,12 @@ void cProxyClient::CloseTuner(void)
 		LOCK(m_writeLock);
 		m_dwBufPos = 0;
 		for (int i = 0; i < 8; i++)
-		{
-			if (m_pBuf[i] != NULL)
-				delete[] m_pBuf[i];
-		}
+			delete[] m_pBuf[i];
 		::memset(m_pBuf, 0, sizeof(m_pBuf));
 	}
 }
 
-const BOOL cProxyClient::SetChannel(const BYTE bCh)
+const BOOL cProxyClient::SetChannel(const BYTE/*bCh*/)
 {
 	return TRUE;
 }
@@ -557,14 +527,10 @@ const BOOL cProxyClient::GetTsStream(BYTE **ppDst, DWORD *pdwSize, DWORD *pdwRem
 		LOCK(m_writeLock);
 		if (m_fifoTS.Size() != 0)
 		{
-			if (m_LastBuff != NULL)
-			{
-				delete m_LastBuff;
-				m_LastBuff = NULL;
-			}
-			m_fifoTS.Pop(&m_LastBuff);
-			*ppDst = m_LastBuff->pbBuff;
-			*pdwSize = m_LastBuff->dwSize;
+			delete m_LastBuf;
+			m_fifoTS.Pop(&m_LastBuf);
+			*ppDst = m_LastBuf->pbBuf;
+			*pdwSize = m_LastBuf->dwSize;
 			*pdwRemain = (DWORD)m_fifoTS.Size();
 			b = TRUE;
 #if _DEBUG && DETAILLOG
@@ -853,7 +819,7 @@ extern "C" __declspec(dllexport) BOOL SetBonDriver(LPCSTR p)
 	return TRUE;
 }
 
-BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID/*lpvReserved*/)
 {
 #if _DEBUG
 	static HANDLE hLogFile;

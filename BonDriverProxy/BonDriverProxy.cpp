@@ -122,7 +122,7 @@ DWORD cProxyServer::Process()
 #endif
 
 	HANDLE h[2] = { m_Error, m_fifoRecv.GetEventHandle() };
-	while (1)
+	for (;;)
 	{
 		DWORD dwRet = ::WaitForMultipleObjects(2, h, FALSE, INFINITE);
 		switch (dwRet)
@@ -527,7 +527,7 @@ end:
 	return 0;
 }
 
-int cProxyServer::ReceiverHelper(char *pDst, int left)
+int cProxyServer::ReceiverHelper(char *pDst, DWORD left)
 {
 	int len, ret;
 	fd_set rd;
@@ -551,14 +551,10 @@ int cProxyServer::ReceiverHelper(char *pDst, int left)
 		if (len == 0)
 			continue;
 
-		if ((len = ::recv(m_s, pDst, left, 0)) == SOCKET_ERROR)
+		// MSDNのrecv()のソース例とか見る限り、"SOCKET_ERROR"が負の値なのは保証されてるっぽい
+		if ((len = ::recv(m_s, pDst, left, 0)) <= 0)
 		{
 			ret = -3;
-			goto err;
-		}
-		else if (len == 0)
-		{
-			ret = -4;
 			goto err;
 		}
 		left -= len;
@@ -573,12 +569,11 @@ err:
 DWORD WINAPI cProxyServer::Receiver(LPVOID pv)
 {
 	cProxyServer *pProxy = static_cast<cProxyServer *>(pv);
-	int left;
 	char *p;
-	DWORD ret;
+	DWORD left, ret;
 	cPacketHolder *pPh = NULL;
 
-	while (1)
+	for (;;)
 	{
 		pPh = new cPacketHolder(16);
 		left = sizeof(stPacketHead);
@@ -596,22 +591,21 @@ DWORD WINAPI cProxyServer::Receiver(LPVOID pv)
 			goto end;
 		}
 
-		left = (int)pPh->GetBodyLength();
+		left = pPh->GetBodyLength();
 		if (left == 0)
 		{
 			pProxy->m_fifoRecv.Push(pPh);
 			continue;
 		}
 
-		if (left > 512 || left < 0)
+		if (left > 16)
 		{
-			pProxy->m_Error.Set();
-			ret = 203;
-			goto end;
-		}
-
-		if (left >= 16)
-		{
+			if (left > 512)
+			{
+				pProxy->m_Error.Set();
+				ret = 203;
+				goto end;
+			}
 			cPacketHolder *pTmp = new cPacketHolder(left);
 			pTmp->m_pPacket->head = pPh->m_pPacket->head;
 			delete pPh;
@@ -628,8 +622,7 @@ DWORD WINAPI cProxyServer::Receiver(LPVOID pv)
 		pProxy->m_fifoRecv.Push(pPh);
 	}
 end:
-	if (pPh)
-		delete pPh;
+	delete pPh;
 	return ret;
 }
 
@@ -678,7 +671,7 @@ DWORD WINAPI cProxyServer::Sender(LPVOID pv)
 	cProxyServer *pProxy = static_cast<cProxyServer *>(pv);
 	DWORD ret;
 	HANDLE h[2] = { pProxy->m_Error, pProxy->m_fifoSend.GetEventHandle() };
-	while (1)
+	for (;;)
 	{
 		DWORD dwRet = ::WaitForMultipleObjects(2, h, FALSE, INFINITE);
 		switch (dwRet)
@@ -954,7 +947,7 @@ int Listen(char *host, unsigned short port)
 		return 4;
 	}
 
-	while (1)
+	for (;;)
 	{
 		int len = sizeof(address);
 		csock = accept(lsock, (LPSOCKADDR)&address, &len);
@@ -1064,8 +1057,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		DispatchMessage(&msg);
 	}
 
-	if (debug)
-		delete debug;
+	delete debug;
 
 	WSACleanup();
 
@@ -1075,7 +1067,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	return (int)msg.wParam;
 }
 #else
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE/*hPrevInstance*/, LPSTR/*lpCmdLine*/, int/*nCmdShow*/)
 {
 	if (Init(hInstance) != 0)
 		return -1;
