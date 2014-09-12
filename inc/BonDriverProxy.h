@@ -115,7 +115,11 @@ public:
 	}
 	~cEvent(){ ::CloseHandle(m_h); }
 	BOOL IsSet(){ return (::WaitForSingleObject(m_h, 0) == WAIT_OBJECT_0); }
-	DWORD Wait(){ return ::WaitForSingleObject(m_h, m_dwWait); }
+	DWORD Wait(HANDLE err_h)
+	{
+		HANDLE h[2] = { err_h, m_h };
+		return ::WaitForMultipleObjects(2, h, FALSE, m_dwWait);
+	}
 	BOOL Set(){ return ::SetEvent(m_h); }
 	BOOL Reset(){ return ::ResetEvent(m_h); }
 	operator HANDLE () const { return m_h; }
@@ -482,8 +486,7 @@ public:
 	~cProxyClient();
 	void setSocket(SOCKET s){ m_s = s; }
 //	void setThreadHandle(HANDLE h){ m_hThread = h; }
-	BOOL IsError(){ return m_Error.IsSet(); }
-	void WaitSingleShot(){ m_SingleShot.Wait(); }
+	DWORD WaitSingleShot(){ return m_SingleShot.Wait(m_Error); }
 	static DWORD WINAPI ProcessEntry(LPVOID pv);
 
 	BOOL SelectBonDriver();

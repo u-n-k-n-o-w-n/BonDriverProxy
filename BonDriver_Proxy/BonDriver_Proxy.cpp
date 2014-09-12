@@ -50,7 +50,10 @@ DWORD WINAPI cProxyClient::ProcessEntry(LPVOID pv)
 {
 	cProxyClient *pProxy = static_cast<cProxyClient *>(pv);
 	DWORD ret = pProxy->Process();
-	pProxy->m_iEndCount++;
+	if (ret == 0)
+		pProxy->m_iEndCount++;
+	else
+		pProxy->m_iEndCount = -1;
 	return ret;
 }
 
@@ -61,7 +64,6 @@ DWORD cProxyClient::Process()
 	if (hThread[0] == NULL)
 	{
 		m_Error.Set();
-		m_SingleShot.Set();
 		return 1;
 	}
 
@@ -71,7 +73,6 @@ DWORD cProxyClient::Process()
 		m_Error.Set();
 		::WaitForSingleObject(hThread[0], INFINITE);
 		::CloseHandle(hThread[0]);
-		m_SingleShot.Set();
 		return 2;
 	}
 
@@ -409,23 +410,25 @@ BOOL cProxyClient::SelectBonDriver()
 		LOCK(Lock_Global);
 		makePacket(eSelectBonDriver, g_BonDriver);
 	}
-	m_bResEvent[ebResSelectBonDriver].Wait();
+	if (m_bResEvent[ebResSelectBonDriver].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		return m_bRes[ebResSelectBonDriver];
 	}
+	return FALSE;
 }
 
 BOOL cProxyClient::CreateBonDriver()
 {
 	makePacket(eCreateBonDriver);
-	m_bResEvent[ebResCreateBonDriver].Wait();
+	if (m_bResEvent[ebResCreateBonDriver].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		if (m_bRes[ebResCreateBonDriver])
 			m_bBonDriver = TRUE;
 		return m_bRes[ebResCreateBonDriver];
 	}
+	return FALSE;
 }
 
 const BOOL cProxyClient::OpenTuner(void)
@@ -433,13 +436,14 @@ const BOOL cProxyClient::OpenTuner(void)
 	if (!m_bBonDriver)
 		return FALSE;
 	makePacket(eOpenTuner);
-	m_bResEvent[ebResOpenTuner].Wait();
+	if (m_bResEvent[ebResOpenTuner].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		if (m_bRes[ebResOpenTuner])
 			m_bTuner = TRUE;
 		return m_bRes[ebResOpenTuner];
 	}
+	return FALSE;
 }
 
 void cProxyClient::CloseTuner(void)
@@ -475,22 +479,22 @@ const DWORD cProxyClient::WaitTsStream(const DWORD dwTimeOut)
 	if (!m_bTuner)
 		return WAIT_ABANDONED;
 
-	HANDLE h[2] = { m_fifoTS.GetEventHandle(), m_Error };
+	HANDLE h[2] = { m_Error, m_fifoTS.GetEventHandle() };
 	DWORD ret = ::WaitForMultipleObjects(2, h, FALSE, (dwTimeOut) ? dwTimeOut : INFINITE);
 	switch (ret)
 	{
 	case WAIT_ABANDONED:
-	case WAIT_OBJECT_0 + 1:
+	case WAIT_OBJECT_0:
 		return WAIT_ABANDONED;
 
-	case WAIT_OBJECT_0:
-	case WAIT_TIMEOUT:
-		break;
+	case WAIT_OBJECT_0 + 1:
+		ret = WAIT_OBJECT_0;
+	case WAIT_TIMEOUT:	// fall-through
+		return ret;
 
 	default:
 		return WAIT_FAILED;
 	}
-	return ret;
 }
 
 const DWORD cProxyClient::GetReadyCount(void)
@@ -552,16 +556,18 @@ void cProxyClient::PurgeTsStream(void)
 	if (!m_bTuner)
 		return;
 	makePacket(ePurgeTsStream);
-	m_bResEvent[ebResPurgeTsStream].Wait();
-	BOOL b;
+	if (m_bResEvent[ebResPurgeTsStream].Wait(m_Error) != WAIT_OBJECT_0)
 	{
-		LOCK(m_readLock);
-		b = m_bRes[ebResPurgeTsStream];
-	}
-	if (b)
-	{
-		LOCK(m_writeLock);
-		TsFlush();
+		BOOL b;
+		{
+			LOCK(m_readLock);
+			b = m_bRes[ebResPurgeTsStream];
+		}
+		if (b)
+		{
+			LOCK(m_writeLock);
+			TsFlush();
+		}
 	}
 }
 
@@ -593,11 +599,12 @@ LPCTSTR cProxyClient::EnumTuningSpace(const DWORD dwSpace)
 	if (!m_bTuner)
 		return NULL;
 	makePacket(eEnumTuningSpace, dwSpace);
-	m_pResEvent[epResEnumTuningSpace].Wait();
+	if (m_pResEvent[epResEnumTuningSpace].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		return m_pRes[epResEnumTuningSpace];
 	}
+	return NULL;
 }
 
 LPCTSTR cProxyClient::EnumChannelName(const DWORD dwSpace, const DWORD dwChannel)
@@ -605,11 +612,12 @@ LPCTSTR cProxyClient::EnumChannelName(const DWORD dwSpace, const DWORD dwChannel
 	if (!m_bTuner)
 		return NULL;
 	makePacket(eEnumChannelName, dwSpace, dwChannel);
-	m_pResEvent[epResEnumChannelName].Wait();
+	if (m_pResEvent[epResEnumChannelName].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		return m_pRes[epResEnumChannelName];
 	}
+	return NULL;
 }
 
 const BOOL cProxyClient::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
@@ -619,12 +627,14 @@ const BOOL cProxyClient::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 //	if ((m_dwSpace == dwSpace) && (m_dwChannel == dwChannel))
 //		return TRUE;
 	makePacket(eSetChannel2, dwSpace, dwChannel, g_ChannelLock);
-	m_dwResEvent[edwResSetChannel2].Wait();
 	DWORD dw;
+	if (m_dwResEvent[edwResSetChannel2].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		dw = m_dwRes[edwResSetChannel2];
 	}
+	else
+		dw = 0xff;
 	BOOL b;
 	switch (dw)
 	{
@@ -660,11 +670,12 @@ const DWORD cProxyClient::GetTotalDeviceNum(void)
 	if (!m_bTuner)
 		return 0;
 	makePacket(eGetTotalDeviceNum);
-	m_dwResEvent[edwResGetTotalDeviceNum].Wait();
+	if (m_dwResEvent[edwResGetTotalDeviceNum].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		return m_dwRes[edwResGetTotalDeviceNum];
 	}
+	return 0;
 }
 
 const DWORD cProxyClient::GetActiveDeviceNum(void)
@@ -672,11 +683,12 @@ const DWORD cProxyClient::GetActiveDeviceNum(void)
 	if (!m_bTuner)
 		return 0;
 	makePacket(eGetActiveDeviceNum);
-	m_dwResEvent[edwResGetActiveDeviceNum].Wait();
+	if (m_dwResEvent[edwResGetActiveDeviceNum].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		return m_dwRes[edwResGetActiveDeviceNum];
 	}
+	return 0;
 }
 
 const BOOL cProxyClient::SetLnbPower(const BOOL bEnable)
@@ -684,11 +696,12 @@ const BOOL cProxyClient::SetLnbPower(const BOOL bEnable)
 	if (!m_bTuner)
 		return FALSE;
 	makePacket(eSetLnbPower, bEnable);
-	m_bResEvent[ebResSetLnbPower].Wait();
+	if (m_bResEvent[ebResSetLnbPower].Wait(m_Error) != WAIT_OBJECT_0)
 	{
 		LOCK(m_readLock);
 		return m_bRes[ebResSetLnbPower];
 	}
+	return FALSE;
 }
 
 SOCKET Connect(char *host, unsigned short port)
@@ -791,8 +804,7 @@ extern "C" __declspec(dllexport) IBonDriver *CreateBonDriver()
 		goto err;
 //	pProxy->setThreadHandle(hThread);
 
-	pProxy->WaitSingleShot();
-	if (pProxy->IsError())
+	if (pProxy->WaitSingleShot() == WAIT_OBJECT_0)
 		goto err;
 
 	if (!pProxy->SelectBonDriver())
