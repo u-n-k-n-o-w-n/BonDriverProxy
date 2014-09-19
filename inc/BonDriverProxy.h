@@ -374,6 +374,7 @@ public:
 			pop();
 			delete p;
 		}
+		m_Event.Reset();
 	}
 
 	void Push(TS_DATA *p)
