@@ -3,6 +3,7 @@
 
 static std::list<cProxyClient *> InstanceList;
 static cCriticalSection Lock_Global;
+static BOOL g_bWinSockInit = TRUE;
 
 cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
 {
@@ -792,6 +793,17 @@ SOCKET Connect(char *host, unsigned short port)
 
 extern "C" __declspec(dllexport) IBonDriver *CreateBonDriver()
 {
+	{
+		LOCK(Lock_Global);
+		if (g_bWinSockInit)
+		{
+			WSADATA wsa;
+			if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+				return NULL;
+			g_bWinSockInit = FALSE;
+		}
+	}
+
 	SOCKET s = Connect(g_Host, g_Port);
 	if (s == INVALID_SOCKET)
 		return NULL;
@@ -852,10 +864,6 @@ BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID/*lpvReserved*/
 #endif
 		if (Init(hinstDLL) != 0)
 			return FALSE;
-
-		WSADATA wsa;
-		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-			return FALSE;
 		break;
 	}
 
@@ -869,8 +877,9 @@ BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID/*lpvReserved*/
 				InstanceList.pop_front();
 				delete pProxy;
 			}
+			if (!g_bWinSockInit)
+				WSACleanup();
 		}
-		WSACleanup();
 #if _DEBUG
 		_RPT0(_CRT_WARN, "--- DLL_PROCESS_DETACH ---\n");
 //		CloseHandle(hLogFile);

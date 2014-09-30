@@ -106,6 +106,9 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.4.5 (Sep/30/2014)
+	・クライアント側で、Winsockの初期化をDllMain()から最初のCreateBonDriver()に移動
+
 version 1.1.4.4 (Sep/21/2014)
 	・クライアント側で、SetChannel()に失敗した場合はシグナルレベル(実態はCNRだが)を0にするようにした
 
