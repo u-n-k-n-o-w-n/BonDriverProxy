@@ -13,7 +13,7 @@ cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
 	::memset(m_pBuf, 0, sizeof(m_pBuf));
 	m_bBonDriver = m_bTuner = m_bRereased = FALSE;
 	m_fSignalLevel = 0;
-	m_dwSpace = m_dwChannel = 0xffffffff;
+	m_dwSpace = m_dwChannel = 0x7fffffff;	// INT_MAX
 //	m_hThread = NULL;
 	m_iEndCount = -1;
 }
@@ -455,7 +455,7 @@ void cProxyClient::CloseTuner(void)
 	makePacket(eCloseTuner);
 	m_bTuner = FALSE;
 	m_fSignalLevel = 0;
-	m_dwSpace = m_dwChannel = 0xffffffff;
+	m_dwSpace = m_dwChannel = 0x7fffffff;	// INT_MAX
 	{
 		LOCK(m_writeLock);
 		m_dwBufPos = 0;
