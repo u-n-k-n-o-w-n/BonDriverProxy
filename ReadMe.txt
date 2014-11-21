@@ -106,6 +106,13 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.4.6 (Nov/21/2014)
+	・あるBonDriverインスタンスをCloseTuner()する際はTS読み出しスレッドを必ず停止させておくようにした
+	・あるBonDriverインスタンスがCloseTuner()時に、チューナのオープン状態フラグが正しく反映されない
+	  パターンがあるのを修正
+	・レアケースだけどデッドロックするパターンへの対策を追加
+	・iniファイルが存在しなかった場合はエラーになるようにした
+
 version 1.1.4.5 (Sep/30/2014)
 	・クライアント側で、Winsockの初期化をDllMain()から最初のCreateBonDriver()に移動
 

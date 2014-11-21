@@ -42,6 +42,11 @@ int Init(HMODULE hModule)
 	p++;
 	strcpy(p, "ini");
 
+	HANDLE hFile = CreateFileA(szIniPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return -2;
+	CloseHandle(hFile);
+
 	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
 	g_Port = (unsigned short)GetPrivateProfileIntA("OPTION", "PORT", 1192, szIniPath);
 	GetPrivateProfileStringA("OPTION", "BONDRIVER", "BonDriver_ptmr.dll", g_BonDriver, sizeof(g_BonDriver), szIniPath);
