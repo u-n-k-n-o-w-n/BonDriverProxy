@@ -16,7 +16,7 @@ cProxyServer::cProxyServer() : m_Error(TRUE, FALSE)
 	m_hModule = NULL;
 	m_pIBon = m_pIBon2 = m_pIBon3 = NULL;
 	m_strBonDriver[0] = '\0';
-	m_bTunerOpen = FALSE;
+	m_bTunerOpen = m_bChannelLock = FALSE;
 	m_hTsRead = NULL;
 	m_pTsReceiversList = NULL;
 	m_pStopTsRead = NULL;
@@ -61,28 +61,30 @@ cProxyServer::~cProxyServer()
 	{
 		if (m_hTsRead)
 		{
-			LOCK(*m_pTsLock);
-			it = m_pTsReceiversList->begin();
-			while (it != m_pTsReceiversList->end())
 			{
-				if (*it == this)
+				LOCK(*m_pTsLock);
+				it = m_pTsReceiversList->begin();
+				while (it != m_pTsReceiversList->end())
 				{
-					m_pTsReceiversList->erase(it);
-					break;
+					if (*it == this)
+					{
+						m_pTsReceiversList->erase(it);
+						break;
+					}
+					++it;
 				}
-				++it;
 			}
-		}
-		// ‰Â”\«‚Í’á‚¢‚ªƒ[ƒ‚Å‚Í‚È‚¢c
-		if (m_pTsReceiversList->empty())
-		{
-			*m_pStopTsRead = TRUE;
-			::WaitForSingleObject(m_hTsRead, INFINITE);
-			::CloseHandle(m_hTsRead);
-			delete m_pTsReceiversList;
-			delete m_pStopTsRead;
-			delete m_pTsLock;
-			delete m_ppos;
+			// ‰Â”\«‚Í’á‚¢‚ªƒ[ƒ‚Å‚Í‚È‚¢c
+			if (m_pTsReceiversList->empty())
+			{
+				*m_pStopTsRead = TRUE;
+				::WaitForSingleObject(m_hTsRead, INFINITE);
+				::CloseHandle(m_hTsRead);
+				delete m_pTsReceiversList;
+				delete m_pStopTsRead;
+				delete m_pTsLock;
+				delete m_ppos;
+			}
 		}
 	}
 
@@ -306,12 +308,23 @@ DWORD cProxyServer::Process()
 				{
 					if (m_hTsRead)
 					{
-						LOCK(*m_pTsLock);
-						CloseTuner();
-						*m_ppos = 0;
-						m_bTunerOpen = FALSE;
+						*m_pStopTsRead = TRUE;
+						::WaitForSingleObject(m_hTsRead, INFINITE);
+						::CloseHandle(m_hTsRead);
+						m_hTsRead = NULL;
+						m_pTsReceiversList->clear();
+						delete m_pTsReceiversList;
+						m_pTsReceiversList = NULL;
+						delete m_pStopTsRead;
+						m_pStopTsRead = NULL;
+						delete m_pTsLock;
+						m_pTsLock = NULL;
+						delete m_ppos;
+						m_ppos = NULL;
 					}
+					CloseTuner();
 				}
+				m_bTunerOpen = FALSE;
 				break;
 			}
 
