@@ -1,0 +1,52 @@
+iniファイルはサーバ側とクライアント側で使用している項目が異なります。
+それぞれのiniファイルで必要無い項目を削除したい人は、削除しても問題ありません。
+現時点での設定項目で使用しているのはそれぞれ以下の通りです。
+また、表記の無い物は使用していない項目です。
+
+// クライアント側
+---
+[OPTION]
+ADDRESS -> オプション、デフォルト127.0.0.1
+PORT -> オプション、デフォルト1192
+BONDRIVER -> オプション、デフォルトBonDriver_ptmr.dll
+CHANNEL_LOCK -> オプション、デフォルト0
+CONNECT_TIMEOUT -> オプション、デフォルト5
+USE_MAGICPACKET -> オプション、デフォルト0
+
+[MAGICPACKET]
+TARGET_ADDRESS -> オプション、デフォルト[OPTION]のADDRESSの値
+TARGET_PORT -> オプション、デフォルト[OPTION]のPORTの値
+TARGET_MACADDRESS -> USE_MAGICPACKETが1の場合のみ必須
+
+[SYSTEM]
+PACKET_FIFO_SIZE -> オプション、デフォルト64
+TS_FIFO_SIZE -> オプション、デフォルト64
+TSPACKET_BUFSIZE -> オプション、デフォルト192512
+---
+
+// サーバ側(BonDriverProxy)
+---
+[OPTION]
+ADDRESS -> オプション、デフォルト127.0.0.1
+PORT -> オプション、デフォルト1192
+
+[SYSTEM]
+PACKET_FIFO_SIZE -> オプション、デフォルト64
+TSPACKET_BUFSIZE -> オプション、デフォルト192512
+---
+
+// サーバ側(BonDriverProxyEx)
+---
+[OPTION]
+ADDRESS -> オプション、デフォルト127.0.0.1
+PORT -> オプション、デフォルト1192
+OPENTUNER_RETURN_DELAY -> オプション、デフォルト0
+
+[BONDRIVER]
+00 -> 普通に考えると必須ですが、無くても起動自体は出来てしまいます
+01以降 -> オプション
+
+[SYSTEM]
+PACKET_FIFO_SIZE -> オプション、デフォルト64
+TSPACKET_BUFSIZE -> オプション、デフォルト192512
+---

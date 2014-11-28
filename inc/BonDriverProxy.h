@@ -1,6 +1,6 @@
 #ifndef __BONDRIVER_PROXY_H__
 #define __BONDRIVER_PROXY_H__
-#include <windows.h>
+#include <winsock2.h>
 #include <tchar.h>
 #include <process.h>
 #include <list>
@@ -81,8 +81,8 @@ int Init(HMODULE hModule)
 		}
 	}
 
-	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 16, szIniPath);
-	g_TsFifoSize = GetPrivateProfileIntA("SYSTEM", "TS_FIFO_SIZE", 32, szIniPath);
+	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 64, szIniPath);
+	g_TsFifoSize = GetPrivateProfileIntA("SYSTEM", "TS_FIFO_SIZE", 64, szIniPath);
 	g_TsPacketBufSize = GetPrivateProfileIntA("SYSTEM", "TSPACKET_BUFSIZE", (188 * 1024), szIniPath);
 
 	return 0;
