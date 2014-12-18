@@ -1,10 +1,66 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
-#include "BonDriverProxy.h"
+#include "BonDriver_Proxy.h"
 
-static std::list<cProxyClient *> InstanceList;
-static cCriticalSection Lock_Global;
-static BOOL g_bWinSockInit = TRUE;
+#if _DEBUG
+#define DETAILLOG	0
+#endif
+
+static int Init(HMODULE hModule)
+{
+	char szIniPath[MAX_PATH + 16] = { '\0' };
+	GetModuleFileNameA(hModule, szIniPath, MAX_PATH);
+	char *p = strrchr(szIniPath, '.');
+	if (!p)
+		return -1;
+	p++;
+	strcpy(p, "ini");
+
+	HANDLE hFile = CreateFileA(szIniPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return -2;
+	CloseHandle(hFile);
+
+	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
+	g_Port = (unsigned short)GetPrivateProfileIntA("OPTION", "PORT", 1192, szIniPath);
+	GetPrivateProfileStringA("OPTION", "BONDRIVER", "BonDriver_ptmr.dll", g_BonDriver, sizeof(g_BonDriver), szIniPath);
+	g_ChannelLock = (BOOL)GetPrivateProfileIntA("OPTION", "CHANNEL_LOCK", 0, szIniPath);
+
+	g_ConnectTimeOut = GetPrivateProfileIntA("OPTION", "CONNECT_TIMEOUT", 5, szIniPath);
+	g_UseMagicPacket = (BOOL)GetPrivateProfileIntA("OPTION", "USE_MAGICPACKET", 0, szIniPath);
+	if (g_UseMagicPacket)
+	{
+		char mac[32];
+		GetPrivateProfileStringA("MAGICPACKET", "TARGET_ADDRESS", g_Host, g_TargetHost, sizeof(g_TargetHost), szIniPath);
+		g_TargetPort = (unsigned short)GetPrivateProfileIntA("MAGICPACKET", "TARGET_PORT", g_Port, szIniPath);
+		memset(mac, 0, sizeof(mac));
+		GetPrivateProfileStringA("MAGICPACKET", "TARGET_MACADDRESS", "", mac, sizeof(mac), szIniPath);
+		for (int i = 0; i < 6; i++)
+		{
+			BYTE b = 0;
+			p = &mac[i * 3];
+			for (int j = 0; j < 2; j++)
+			{
+				if ('0' <= *p && *p <= '9')
+					b = b * 0x10 + (*p - '0');
+				else if ('A' <= *p && *p <= 'F')
+					b = b * 0x10 + (*p - 'A' + 10);
+				else if ('a' <= *p && *p <= 'f')
+					b = b * 0x10 + (*p - 'a' + 10);
+				else
+					return -2;
+				p++;
+			}
+			g_TargetMac[i] = b;
+		}
+	}
+
+	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 64, szIniPath);
+	g_TsFifoSize = GetPrivateProfileIntA("SYSTEM", "TS_FIFO_SIZE", 64, szIniPath);
+	g_TsPacketBufSize = GetPrivateProfileIntA("SYSTEM", "TSPACKET_BUFSIZE", (188 * 1024), szIniPath);
+
+	return 0;
+}
 
 cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
 {
@@ -409,7 +465,7 @@ end:
 BOOL cProxyClient::SelectBonDriver()
 {
 	{
-		LOCK(Lock_Global);
+		LOCK(g_Lock);
 		makePacket(eSelectBonDriver, g_BonDriver);
 	}
 	if (m_bResEvent[ebResSelectBonDriver].Wait(m_Error) != WAIT_OBJECT_0)
@@ -580,8 +636,8 @@ void cProxyClient::Release(void)
 	makePacket(eRelease);
 	m_bRereased = TRUE;
 	{
-		LOCK(Lock_Global);
-		InstanceList.remove(this);
+		LOCK(g_Lock);
+		g_InstanceList.remove(this);
 	}
 	delete this;
 }
@@ -705,7 +761,7 @@ const BOOL cProxyClient::SetLnbPower(const BOOL bEnable)
 	return FALSE;
 }
 
-SOCKET Connect(char *host, unsigned short port)
+static SOCKET Connect(char *host, unsigned short port)
 {
 	SOCKADDR_IN server;
 	LPHOSTENT he;
@@ -795,7 +851,7 @@ SOCKET Connect(char *host, unsigned short port)
 extern "C" __declspec(dllexport) IBonDriver *CreateBonDriver()
 {
 	{
-		LOCK(Lock_Global);
+		LOCK(g_Lock);
 		if (g_bWinSockInit)
 		{
 			WSADATA wsa;
@@ -824,8 +880,8 @@ extern "C" __declspec(dllexport) IBonDriver *CreateBonDriver()
 
 	if (pProxy->CreateBonDriver())
 	{
-		LOCK(Lock_Global);
-		InstanceList.push_back(pProxy);
+		LOCK(g_Lock);
+		g_InstanceList.push_back(pProxy);
 		return pProxy;
 	}
 
@@ -836,7 +892,7 @@ err:
 
 extern "C" __declspec(dllexport) BOOL SetBonDriver(LPCSTR p)
 {
-	LOCK(Lock_Global);
+	LOCK(g_Lock);
 	if (strlen(p) >= sizeof(g_BonDriver))
 		return FALSE;
 	strcpy(g_BonDriver, p);
@@ -871,11 +927,11 @@ BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID/*lpvReserved*/
 	case DLL_PROCESS_DETACH:
 	{
 		{
-			LOCK(Lock_Global);
-			while (!InstanceList.empty())
+			LOCK(g_Lock);
+			while (!g_InstanceList.empty())
 			{
-				cProxyClient *pProxy = InstanceList.front();
-				InstanceList.pop_front();
+				cProxyClient *pProxy = g_InstanceList.front();
+				g_InstanceList.pop_front();
 				delete pProxy;
 			}
 			if (!g_bWinSockInit)

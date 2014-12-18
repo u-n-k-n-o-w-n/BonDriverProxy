@@ -5,11 +5,33 @@
 #define STRICT_LOCK
 
 #if _DEBUG
+#define DETAILLOG	0
 static cProxyServer *debug;
 #endif
 
-static std::list<cProxyServer *> InstanceList;
-static cCriticalSection Lock_Instance;
+static int Init(HMODULE hModule)
+{
+	char szIniPath[MAX_PATH + 16] = { '\0' };
+	GetModuleFileNameA(hModule, szIniPath, MAX_PATH);
+	char *p = strrchr(szIniPath, '.');
+	if (!p)
+		return -1;
+	p++;
+	strcpy(p, "ini");
+
+	HANDLE hFile = CreateFileA(szIniPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return -2;
+	CloseHandle(hFile);
+
+	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
+	g_Port = (unsigned short)GetPrivateProfileIntA("OPTION", "PORT", 1192, szIniPath);
+
+	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 64, szIniPath);
+	g_TsPacketBufSize = GetPrivateProfileIntA("SYSTEM", "TSPACKET_BUFSIZE", (188 * 1024), szIniPath);
+
+	return 0;
+}
 
 cProxyServer::cProxyServer() : m_Error(TRUE, FALSE)
 {
@@ -27,13 +49,13 @@ cProxyServer::cProxyServer() : m_Error(TRUE, FALSE)
 
 cProxyServer::~cProxyServer()
 {
-	LOCK(Lock_Instance);
+	LOCK(g_Lock);
 	BOOL bRelease = TRUE;
-	std::list<cProxyServer *>::iterator it = InstanceList.begin();
-	while (it != InstanceList.end())
+	std::list<cProxyServer *>::iterator it = g_InstanceList.begin();
+	while (it != g_InstanceList.end())
 	{
 		if (*it == this)
-			InstanceList.erase(it++);
+			g_InstanceList.erase(it++);
 		else
 		{
 			if ((m_hModule != NULL) && (m_hModule == (*it)->m_hModule))
@@ -136,7 +158,7 @@ DWORD cProxyServer::Process()
 		case WAIT_OBJECT_0 + 1:
 		{
 #ifdef STRICT_LOCK
-			LOCK(Lock_Instance);
+			LOCK(g_Lock);
 #endif
 			cPacketHolder *pPh;
 			m_fifoRecv.Pop(&pPh);
@@ -150,9 +172,9 @@ DWORD cProxyServer::Process()
 				{
 					BOOL bFind = FALSE;
 #ifndef STRICT_LOCK
-					LOCK(Lock_Instance);
+					LOCK(g_Lock);
 #endif
-					for (std::list<cProxyServer *>::iterator it = InstanceList.begin(); it != InstanceList.end(); ++it)
+					for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
 					{
 						if (::strcmp((LPCSTR)(pPh->m_pPacket->payload), (*it)->m_strBonDriver) == 0)
 						{
@@ -171,13 +193,13 @@ DWORD cProxyServer::Process()
 						bSuccess = SelectBonDriver((LPCSTR)(pPh->m_pPacket->payload));
 						if (bSuccess)
 						{
-							InstanceList.push_back(this);
+							g_InstanceList.push_back(this);
 							::strcpy_s(m_strBonDriver, (LPCSTR)(pPh->m_pPacket->payload));
 						}
 					}
 					else
 					{
-						InstanceList.push_back(this);
+						g_InstanceList.push_back(this);
 						bSuccess = TRUE;
 					}
 					makePacket(eSelectBonDriver, bSuccess);
@@ -193,9 +215,9 @@ DWORD cProxyServer::Process()
 					BOOL bLoop = FALSE;
 					{
 #ifndef STRICT_LOCK
-						LOCK(Lock_Instance);
+						LOCK(g_Lock);
 #endif
-						for (std::list<cProxyServer *>::iterator it = InstanceList.begin(); it != InstanceList.end(); ++it)
+						for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
 						{
 							if (*it == this)
 								continue;
@@ -261,9 +283,9 @@ DWORD cProxyServer::Process()
 				BOOL bFind = FALSE;
 				{
 #ifndef STRICT_LOCK
-					LOCK(Lock_Instance);
+					LOCK(g_Lock);
 #endif
-					for (std::list<cProxyServer *>::iterator it = InstanceList.begin(); it != InstanceList.end(); ++it)
+					for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
 					{
 						if (*it == this)
 							continue;
@@ -289,9 +311,9 @@ DWORD cProxyServer::Process()
 				BOOL bFind = FALSE;
 				{
 #ifndef STRICT_LOCK
-					LOCK(Lock_Instance);
+					LOCK(g_Lock);
 #endif
-					for (std::list<cProxyServer *>::iterator it = InstanceList.begin(); it != InstanceList.end(); ++it)
+					for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
 					{
 						if (*it == this)
 							continue;
@@ -387,9 +409,9 @@ DWORD cProxyServer::Process()
 					BOOL bLocked = FALSE;
 					{
 #ifndef STRICT_LOCK
-						LOCK(Lock_Instance);
+						LOCK(g_Lock);
 #endif
-						for (std::list<cProxyServer *>::iterator it = InstanceList.begin(); it != InstanceList.end(); ++it)
+						for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
 						{
 							if (*it == this)
 								continue;
@@ -437,8 +459,8 @@ DWORD cProxyServer::Process()
 								// ただしそのかわりに、BonDriver_Proxyをロードし、そこからのプロキシチェーンのどこかで
 								// 自分自身に再帰接続した場合はデッドロックとなるので注意
 								BOOL bFind = FALSE;
-								LOCK(Lock_Instance);
-								for (std::list<cProxyServer *>::iterator it = InstanceList.begin(); it != InstanceList.end(); ++it)
+								LOCK(g_Lock);
+								for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
 								{
 									if (*it == this)
 										continue;
@@ -917,13 +939,13 @@ struct HostInfo{
 	char *host;
 	unsigned short port;
 };
-DWORD WINAPI Listen(LPVOID pv)
+static DWORD WINAPI Listen(LPVOID pv)
 {
 	HostInfo *hinfo = static_cast<HostInfo *>(pv);
 	char *host = hinfo->host;
 	unsigned short port = hinfo->port;
 #else
-int Listen(char *host, unsigned short port)
+static int Listen(char *host, unsigned short port)
 {
 #endif
 	SOCKADDR_IN address;

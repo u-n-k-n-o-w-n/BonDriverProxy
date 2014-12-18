@@ -26,10 +26,16 @@
     <ClInclude Include="..\inc\IBonDriver3.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\inc\BonDriverProxy.h">
+    <ClInclude Include="..\inc\IBonDriver.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\inc\IBonDriver.h">
+    <ClInclude Include="BonDriverProxy.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\inc\Common.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\inc\BdpPacket.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>

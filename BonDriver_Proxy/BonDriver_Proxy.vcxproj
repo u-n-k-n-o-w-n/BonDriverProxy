@@ -156,10 +156,12 @@
     <ClCompile Include="BonDriver_Proxy.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\inc\BonDriverProxy.h" />
+    <ClInclude Include="..\inc\BdpPacket.h" />
+    <ClInclude Include="..\inc\Common.h" />
     <ClInclude Include="..\inc\IBonDriver.h" />
     <ClInclude Include="..\inc\IBonDriver2.h" />
     <ClInclude Include="..\inc\IBonDriver3.h" />
+    <ClInclude Include="BonDriver_Proxy.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="BonDriver_Proxy.rc" />
