@@ -44,6 +44,8 @@ __declspec(align(1)) struct stPacket {
 class cPacketHolder {
 #ifdef __BONDRIVERPROXY_H__
 	friend class cProxyServer;
+#elif defined(__BONDRIVER_PROXYEX_H__)
+	friend class cProxyServerEx;
 #else
 	friend class cProxyClient;
 #endif
