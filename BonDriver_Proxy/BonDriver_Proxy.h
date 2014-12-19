@@ -1,6 +1,7 @@
 #ifndef __BONDRIVER_PROXY_H__
 #define __BONDRIVER_PROXY_H__
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #include <tchar.h>
 #include <process.h>
 #include <list>
@@ -19,8 +20,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #define MAX_HOST_LEN	256
+#define MAX_PORT_LEN	8
 static char g_Host[MAX_HOST_LEN];
-static unsigned short g_Port;
+static char g_Port[MAX_PORT_LEN];
 static char g_BonDriver[MAX_PATH];
 static BOOL g_ChannelLock;
 static size_t g_PacketFifoSize;
@@ -30,7 +32,7 @@ static int g_ConnectTimeOut;
 static BOOL g_UseMagicPacket;
 static char g_TargetMac[6];
 static char g_TargetHost[MAX_HOST_LEN];
-static unsigned short g_TargetPort;
+static char g_TargetPort[MAX_PORT_LEN];
 
 #include "BdpPacket.h"
 

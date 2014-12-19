@@ -1,6 +1,7 @@
 #ifndef __BONDRIVERPROXY_H__
 #define __BONDRIVERPROXY_H__
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #include <tchar.h>
 #include <process.h>
 #include <list>
@@ -19,7 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 static char g_Host[256];
-static unsigned short g_Port;
+static char g_Port[8];
 static size_t g_PacketFifoSize;
 static DWORD g_TsPacketBufSize;
 

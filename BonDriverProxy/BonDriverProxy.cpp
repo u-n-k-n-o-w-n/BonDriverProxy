@@ -1,5 +1,4 @@
 #define _CRT_SECURE_NO_WARNINGS
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "BonDriverProxy.h"
 
 #define STRICT_LOCK
@@ -25,7 +24,7 @@ static int Init(HMODULE hModule)
 	CloseHandle(hFile);
 
 	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
-	g_Port = (unsigned short)GetPrivateProfileIntA("OPTION", "PORT", 1192, szIniPath);
+	GetPrivateProfileStringA("OPTION", "PORT", "1192", g_Port, sizeof(g_Port), szIniPath);
 
 	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 64, szIniPath);
 	g_TsPacketBufSize = GetPrivateProfileIntA("SYSTEM", "TSPACKET_BUFSIZE", (188 * 1024), szIniPath);
@@ -578,7 +577,7 @@ int cProxyServer::ReceiverHelper(char *pDst, DWORD left)
 
 		FD_ZERO(&rd);
 		FD_SET(m_s, &rd);
-		if ((len = ::select((int)(m_s + 1), &rd, NULL, NULL, &tv)) == SOCKET_ERROR)
+		if ((len = ::select(0/*(int)(m_s + 1)*/, &rd, NULL, NULL, &tv)) == SOCKET_ERROR)
 		{
 			ret = -2;
 			goto err;
@@ -937,56 +936,59 @@ const BOOL cProxyServer::SetLnbPower(const BOOL bEnable)
 #if _DEBUG
 struct HostInfo{
 	char *host;
-	unsigned short port;
+	char *port;
 };
 static DWORD WINAPI Listen(LPVOID pv)
 {
 	HostInfo *hinfo = static_cast<HostInfo *>(pv);
 	char *host = hinfo->host;
-	unsigned short port = hinfo->port;
+	char *port = hinfo->port;
 #else
-static int Listen(char *host, unsigned short port)
+static int Listen(char *host, char *port)
 {
 #endif
-	SOCKADDR_IN address;
-	LPHOSTENT he;
+	addrinfo hints, *results, *rp;
 	SOCKET lsock, csock;
 
-	lsock = socket(AF_INET, SOCK_STREAM, 0);
-	if (lsock == INVALID_SOCKET)
-		return 1;
-
-	BOOL exclusive = TRUE;
-	setsockopt(lsock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
-	memset((char *)&address, 0, sizeof(address));
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = inet_addr(host);
-	if (address.sin_addr.s_addr == INADDR_NONE)
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_flags = AI_PASSIVE | AI_NUMERICHOST;
+	if (getaddrinfo(host, port, &hints, &results) != 0)
 	{
-		he = gethostbyname(host);
-		if (he == NULL)
-		{
-			closesocket(lsock);
-			return 2;
-		}
-		memcpy(&(address.sin_addr), *(he->h_addr_list), he->h_length);
+		hints.ai_flags = AI_PASSIVE;
+		if (getaddrinfo(host, port, &hints, &results) != 0)
+			return 1;
 	}
-	address.sin_port = htons(port);
-	if (bind(lsock, (LPSOCKADDR)&address, sizeof(address)) == SOCKET_ERROR)
+
+	for (rp = results; rp != NULL; rp = rp->ai_next)
+	{
+		lsock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (lsock == INVALID_SOCKET)
+			continue;
+
+		BOOL exclusive = TRUE;
+		setsockopt(lsock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
+
+		if (bind(lsock, rp->ai_addr, (int)(rp->ai_addrlen)) != SOCKET_ERROR)
+			break;
+
+		closesocket(lsock);
+	}
+	freeaddrinfo(results);
+	if (rp == NULL)
+		return 2;
+
+	if (listen(lsock, 4) == SOCKET_ERROR)
 	{
 		closesocket(lsock);
 		return 3;
 	}
-	if (listen(lsock, 4) == SOCKET_ERROR)
-	{
-		closesocket(lsock);
-		return 4;
-	}
 
 	for (;;)
 	{
-		int len = sizeof(address);
-		csock = accept(lsock, (LPSOCKADDR)&address, &len);
+		csock = accept(lsock, NULL, NULL);
 		if (csock == INVALID_SOCKET)
 			continue;
 

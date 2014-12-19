@@ -1,5 +1,4 @@
 #define _CRT_SECURE_NO_WARNINGS
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "BonDriver_Proxy.h"
 
 #if _DEBUG
@@ -22,7 +21,7 @@ static int Init(HMODULE hModule)
 	CloseHandle(hFile);
 
 	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
-	g_Port = (unsigned short)GetPrivateProfileIntA("OPTION", "PORT", 1192, szIniPath);
+	GetPrivateProfileStringA("OPTION", "PORT", "1192", g_Port, sizeof(g_Port), szIniPath);
 	GetPrivateProfileStringA("OPTION", "BONDRIVER", "BonDriver_ptmr.dll", g_BonDriver, sizeof(g_BonDriver), szIniPath);
 	g_ChannelLock = (BOOL)GetPrivateProfileIntA("OPTION", "CHANNEL_LOCK", 0, szIniPath);
 
@@ -32,7 +31,7 @@ static int Init(HMODULE hModule)
 	{
 		char mac[32];
 		GetPrivateProfileStringA("MAGICPACKET", "TARGET_ADDRESS", g_Host, g_TargetHost, sizeof(g_TargetHost), szIniPath);
-		g_TargetPort = (unsigned short)GetPrivateProfileIntA("MAGICPACKET", "TARGET_PORT", g_Port, szIniPath);
+		GetPrivateProfileStringA("MAGICPACKET", "TARGET_PORT", g_Port, g_TargetPort, sizeof(g_TargetPort), szIniPath);
 		memset(mac, 0, sizeof(mac));
 		GetPrivateProfileStringA("MAGICPACKET", "TARGET_MACADDRESS", "", mac, sizeof(mac), szIniPath);
 		for (int i = 0; i < 6; i++)
@@ -288,7 +287,7 @@ int cProxyClient::ReceiverHelper(char *pDst, DWORD left)
 
 		FD_ZERO(&rd);
 		FD_SET(m_s, &rd);
-		if ((len = ::select((int)(m_s + 1), &rd, NULL, NULL, &tv)) == SOCKET_ERROR)
+		if ((len = ::select(0/*(int)(m_s + 1)*/, &rd, NULL, NULL, &tv)) == SOCKET_ERROR)
 		{
 			ret = -2;
 			goto err;
@@ -761,16 +760,17 @@ const BOOL cProxyClient::SetLnbPower(const BOOL bEnable)
 	return FALSE;
 }
 
-static SOCKET Connect(char *host, unsigned short port)
+static SOCKET Connect(char *host, char *port)
 {
-	SOCKADDR_IN server;
-	LPHOSTENT he;
+	addrinfo hints, *results, *rp;
 	SOCKET sock;
 	int i;
 	unsigned long bf;
 	fd_set wd;
 	timeval tv;
 
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
 	if (g_UseMagicPacket)
 	{
 		char sendbuf[128];
@@ -778,73 +778,78 @@ static SOCKET Connect(char *host, unsigned short port)
 		for (i = 1; i <= 16; i++)
 			memcpy(&sendbuf[i * 6], g_TargetMac, 6);
 
-		sock = socket(AF_INET, SOCK_DGRAM, 0);
-		if (sock == INVALID_SOCKET)
-			return INVALID_SOCKET;
-
-		BOOL opt = TRUE;
-		if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&opt, sizeof(opt)) != 0)
+		hints.ai_socktype = SOCK_DGRAM;
+		hints.ai_protocol = IPPROTO_UDP;
+		hints.ai_flags = AI_NUMERICHOST;
+		if (getaddrinfo(g_TargetHost, g_TargetPort, &hints, &results) != 0)
 		{
-			closesocket(sock);
-			return INVALID_SOCKET;
+			hints.ai_flags = 0;
+			if (getaddrinfo(g_TargetHost, g_TargetPort, &hints, &results) != 0)
+				return INVALID_SOCKET;
 		}
 
-		memset((char *)&server, 0, sizeof(server));
-		server.sin_family = AF_INET;
-		server.sin_addr.s_addr = inet_addr(g_TargetHost);
-		if (server.sin_addr.s_addr == INADDR_NONE)
+		for (rp = results; rp != NULL; rp = rp->ai_next)
 		{
-			he = gethostbyname(g_TargetHost);
-			if (he == NULL)
+			sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+			if (sock == INVALID_SOCKET)
+				continue;
+
+			BOOL opt = TRUE;
+			if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&opt, sizeof(opt)) != 0)
 			{
 				closesocket(sock);
-				return INVALID_SOCKET;
+				continue;
 			}
-			memcpy(&(server.sin_addr), *(he->h_addr_list), he->h_length);
+
+			int ret = sendto(sock, sendbuf, 102, 0, rp->ai_addr, (int)(rp->ai_addrlen));
+			closesocket(sock);
+			if (ret == 102)
+				break;
 		}
-		server.sin_port = htons(g_TargetPort);
-		int ret = sendto(sock, sendbuf, 102, 0, (LPSOCKADDR)&server, sizeof(server));
-		closesocket(sock);
-		if (ret != 102)
+		freeaddrinfo(results);
+		if (rp == NULL)
 			return INVALID_SOCKET;
 	}
 
-	sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock == INVALID_SOCKET)
-		return INVALID_SOCKET;
-	memset((char *)&server, 0, sizeof(server));
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = inet_addr(host);
-	if (server.sin_addr.s_addr == INADDR_NONE)
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_flags = AI_NUMERICHOST;
+	if (getaddrinfo(host, port, &hints, &results) != 0)
 	{
-		he = gethostbyname(host);
-		if (he == NULL)
-		{
-			closesocket(sock);
+		hints.ai_flags = 0;
+		if (getaddrinfo(host, port, &hints, &results) != 0)
 			return INVALID_SOCKET;
+	}
+
+	for (rp = results; rp != NULL; rp = rp->ai_next)
+	{
+		sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (sock == INVALID_SOCKET)
+			continue;
+
+		bf = TRUE;
+		ioctlsocket(sock, FIONBIO, &bf);
+		tv.tv_sec = g_ConnectTimeOut;
+		tv.tv_usec = 0;
+		FD_ZERO(&wd);
+		FD_SET(sock, &wd);
+		connect(sock, rp->ai_addr, (int)(rp->ai_addrlen));
+		if ((i = select(0/*(int)(sock + 1)*/, 0, &wd, 0, &tv)) != SOCKET_ERROR)
+		{
+			// タイムアウト時間が"全体の"ではなく"個々のソケットの"になるけど、とりあえずこれで
+			if (i != 0)
+			{
+				bf = FALSE;
+				ioctlsocket(sock, FIONBIO, &bf);
+				break;
+			}
 		}
-		memcpy(&(server.sin_addr), *(he->h_addr_list), he->h_length);
-	}
-	server.sin_port = htons(port);
-	bf = TRUE;
-	ioctlsocket(sock, FIONBIO, &bf);
-	tv.tv_sec = g_ConnectTimeOut;
-	tv.tv_usec = 0;
-	FD_ZERO(&wd);
-	FD_SET(sock, &wd);
-	connect(sock, (LPSOCKADDR)&server, sizeof(server));
-	if ((i = select((int)(sock + 1), 0, &wd, 0, &tv)) == SOCKET_ERROR)
-	{
 		closesocket(sock);
-		return INVALID_SOCKET;
 	}
-	if (i == 0)
-	{
-		closesocket(sock);
+	freeaddrinfo(results);
+	if (rp == NULL)
 		return INVALID_SOCKET;
-	}
-	bf = FALSE;
-	ioctlsocket(sock, FIONBIO, &bf);
+
 	return sock;
 }
 
