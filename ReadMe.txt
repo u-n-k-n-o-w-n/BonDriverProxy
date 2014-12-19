@@ -106,6 +106,12 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.4.7 (Dec/19/2014)
+	・IPv6に対応した
+	・ホスト名として許可する長さを63文字以下から255文字以下にした
+	・サーバ側のlistenソケットのオプションをSO_EXCLUSIVEADDRUSEに変更した(winsockの仕様への対応)
+	・その他ロジックは変更無しでのソースコード整形
+
 version 1.1.4.6 (Nov/21/2014)
 	・あるBonDriverインスタンスをCloseTuner()する際はTS読み出しスレッドを必ず停止させておくようにした
 	・あるBonDriverインスタンスがCloseTuner()時に、チューナのオープン状態フラグが正しく反映されない
