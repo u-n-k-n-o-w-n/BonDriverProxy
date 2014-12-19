@@ -18,7 +18,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static char g_Host[64];
+#define MAX_HOST_LEN	256
+static char g_Host[MAX_HOST_LEN];
 static unsigned short g_Port;
 static char g_BonDriver[MAX_PATH];
 static BOOL g_ChannelLock;
@@ -28,7 +29,7 @@ static DWORD g_TsPacketBufSize;
 static int g_ConnectTimeOut;
 static BOOL g_UseMagicPacket;
 static char g_TargetMac[6];
-static char g_TargetHost[64];
+static char g_TargetHost[MAX_HOST_LEN];
 static unsigned short g_TargetPort;
 
 #include "BdpPacket.h"
