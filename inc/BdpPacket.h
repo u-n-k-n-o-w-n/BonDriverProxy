@@ -27,7 +27,9 @@ enum enumCommand {
 	eSetLnbPower,
 };
 
-__declspec(align(1)) struct stPacketHead {
+#pragma pack(push, 1)
+
+struct stPacketHead {
 	BYTE m_bSync;
 	BYTE m_bCommand;
 	BYTE m_bReserved1;
@@ -35,10 +37,12 @@ __declspec(align(1)) struct stPacketHead {
 	DWORD m_dwBodyLength;
 };
 
-__declspec(align(1)) struct stPacket {
+struct stPacket {
 	stPacketHead head;
 	BYTE payload[1];
 };
+
+#pragma pack(pop)
 
 #define SYNC_BYTE	0xff
 class cPacketHolder {
