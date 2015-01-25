@@ -106,6 +106,9 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.4.8 (Jan/26/2015)
+	・IBonDriver::Release()内部でのAccess Violation等の発生を無視する設定を追加
+
 version 1.1.4.7 (Dec/19/2014)
 	・IPv6に対応した
 	・ホスト名として許可する長さを63文字以下から255文字以下にした

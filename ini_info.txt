@@ -6,47 +6,49 @@ iniファイルはサーバ側とクライアント側で使用している項目が異なります。
 // クライアント側
 ---
 [OPTION]
-ADDRESS -> オプション、デフォルト127.0.0.1
-PORT -> オプション、デフォルト1192
-BONDRIVER -> オプション、デフォルトBonDriver_ptmr.dll
-CHANNEL_LOCK -> オプション、デフォルト0
-CONNECT_TIMEOUT -> オプション、デフォルト5
-USE_MAGICPACKET -> オプション、デフォルト0
+ADDRESS -> オプション、デフォルト127.0.0.1 : サーバ側のアドレス
+PORT -> オプション、デフォルト1192 : サーバ側の待ち受けポート
+BONDRIVER -> オプション、デフォルトBonDriver_ptmr.dll : 読み込むBonDriverのファイル名
+CHANNEL_LOCK -> オプション、デフォルト0 : このクライアントからの接続でチャンネル変更の排他制御を有効にするかどうか / 1:yes 0:no
+CONNECT_TIMEOUT -> オプション、デフォルト5 : サーバが応答しない場合の接続タイムアウト時間(秒)
+USE_MAGICPACKET -> オプション、デフォルト0 : WOLパケットを投げるかどうか / 1:yes 0:no
 
 [MAGICPACKET]
-TARGET_ADDRESS -> オプション、デフォルト[OPTION]のADDRESSの値
-TARGET_PORT -> オプション、デフォルト[OPTION]のPORTの値
-TARGET_MACADDRESS -> USE_MAGICPACKETが1の場合のみ必須
+TARGET_ADDRESS -> オプション、デフォルト[OPTION]のADDRESSの値 : WOLパケットの送信先アドレス
+TARGET_PORT -> オプション、デフォルト[OPTION]のPORTの値 : WOLパケットの送信先ポート
+TARGET_MACADDRESS -> USE_MAGICPACKETが1の場合のみ必須 : WOL対象のMACアドレス
 
 [SYSTEM]
-PACKET_FIFO_SIZE -> オプション、デフォルト64
-TS_FIFO_SIZE -> オプション、デフォルト64
-TSPACKET_BUFSIZE -> オプション、デフォルト192512
+PACKET_FIFO_SIZE -> オプション、デフォルト64 : コマンドパケット用のキューサイズ
+TS_FIFO_SIZE -> オプション、デフォルト64 : TSバッファ用のキューサイズ
+TSPACKET_BUFSIZE -> オプション、デフォルト192512 : 1つのTSバッファのサイズ(バイト)
 ---
 
 // サーバ側(BonDriverProxy)
 ---
 [OPTION]
-ADDRESS -> オプション、デフォルト127.0.0.1
-PORT -> オプション、デフォルト1192
+ADDRESS -> オプション、デフォルト127.0.0.1 : 待ち受けに利用するアドレス
+PORT -> オプション、デフォルト1192 : 待ち受けポート
+SANDBOXED_RELEASE -> オプション、デフォルト0 : BonDriverに対してRelease()を試みる際に、その内部で発生したAccess Violation等を無視するかどうか / 1:yes 0:no
 
 [SYSTEM]
-PACKET_FIFO_SIZE -> オプション、デフォルト64
-TSPACKET_BUFSIZE -> オプション、デフォルト192512
+PACKET_FIFO_SIZE -> オプション、デフォルト64 : クライアント側の物と同じ
+TSPACKET_BUFSIZE -> オプション、デフォルト192512 : クライアント側の物と同じ
 ---
 
 // サーバ側(BonDriverProxyEx)
 ---
 [OPTION]
-ADDRESS -> オプション、デフォルト127.0.0.1
-PORT -> オプション、デフォルト1192
-OPENTUNER_RETURN_DELAY -> オプション、デフォルト0
+ADDRESS -> オプション、デフォルト127.0.0.1 : サーバ側(BonDriverProxy)の物と同じ
+PORT -> オプション、デフォルト1192 : サーバ側(BonDriverProxy)の物と同じ
+OPENTUNER_RETURN_DELAY -> オプション、デフォルト0 : BonDriverに対してOpenTuner()を試みた後、以後の処理を開始するまでに待つ時間(ミリ秒)
+SANDBOXED_RELEASE -> オプション、デフォルト0 : サーバ側(BonDriverProxy)の物と同じ
 
 [BONDRIVER]
-00 -> 普通に考えると必須ですが、無くても起動自体は出来てしまいます
+00 -> 普通に考えると必須ですが、無くても起動自体は出来てしまいます : BonDriverグループ定義
 01以降 -> オプション
 
 [SYSTEM]
-PACKET_FIFO_SIZE -> オプション、デフォルト64
-TSPACKET_BUFSIZE -> オプション、デフォルト192512
+PACKET_FIFO_SIZE -> オプション、デフォルト64 : クライアント側の物と同じ
+TSPACKET_BUFSIZE -> オプション、デフォルト192512 : クライアント側の物と同じ
 ---
