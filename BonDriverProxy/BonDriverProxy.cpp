@@ -25,6 +25,7 @@ static int Init(HMODULE hModule)
 
 	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
 	GetPrivateProfileStringA("OPTION", "PORT", "1192", g_Port, sizeof(g_Port), szIniPath);
+	g_SandBoxedRelease = GetPrivateProfileIntA("OPTION", "SANDBOXED_RELEASE", 0, szIniPath);
 
 	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 64, szIniPath);
 	g_TsPacketBufSize = GetPrivateProfileIntA("SYSTEM", "TSPACKET_BUFSIZE", (188 * 1024), szIniPath);
@@ -74,8 +75,9 @@ cProxyServer::~cProxyServer()
 			delete m_pTsLock;
 			delete m_ppos;
 		}
-		if (m_pIBon)
-			m_pIBon->Release();
+
+		Release();
+
 		if (m_hModule)
 			::FreeLibrary(m_hModule);
 	}
@@ -885,6 +887,20 @@ void cProxyServer::PurgeTsStream(void)
 {
 	if (m_pIBon)
 		m_pIBon->PurgeTsStream();
+}
+
+void cProxyServer::Release(void)
+{
+	if (m_pIBon)
+	{
+		if (g_SandBoxedRelease)
+		{
+			__try { m_pIBon->Release(); }
+			__except (EXCEPTION_EXECUTE_HANDLER){}
+		}
+		else
+			m_pIBon->Release();
+	}
 }
 
 LPCTSTR cProxyServer::EnumTuningSpace(const DWORD dwSpace)

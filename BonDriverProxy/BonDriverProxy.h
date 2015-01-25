@@ -23,6 +23,7 @@ static char g_Host[256];
 static char g_Port[8];
 static size_t g_PacketFifoSize;
 static DWORD g_TsPacketBufSize;
+static BOOL g_SandBoxedRelease;
 
 #include "BdpPacket.h"
 
@@ -69,6 +70,7 @@ private:
 	const BOOL OpenTuner(void);
 	void CloseTuner(void);
 	void PurgeTsStream(void);
+	void Release(void);
 
 	// IBonDriver2
 	LPCTSTR EnumTuningSpace(const DWORD dwSpace);
