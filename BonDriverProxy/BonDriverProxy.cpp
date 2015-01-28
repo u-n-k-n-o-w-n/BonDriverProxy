@@ -336,7 +336,10 @@ DWORD cProxyServer::Process()
 					else
 					{
 						{
-							LOCK(*m_pTsLock);
+#ifndef STRICT_LOCK
+							LOCK(g_Lock);
+#endif
+							m_pTsLock->Enter();
 							std::list<cProxyServer *>::iterator it = m_pTsReceiversList->begin();
 							while (it != m_pTsReceiversList->end())
 							{
@@ -347,6 +350,7 @@ DWORD cProxyServer::Process()
 								}
 								++it;
 							}
+							m_pTsLock->Leave();
 						}
 						// ‰Â”\«‚Í’á‚¢‚ªƒ[ƒ‚Å‚Í‚È‚¢c
 						if (m_pTsReceiversList->empty())
