@@ -84,19 +84,18 @@ cProxyServer::~cProxyServer()
 	{
 		if (m_hTsRead)
 		{
+			m_pTsLock->Enter();
+			it = m_pTsReceiversList->begin();
+			while (it != m_pTsReceiversList->end())
 			{
-				LOCK(*m_pTsLock);
-				it = m_pTsReceiversList->begin();
-				while (it != m_pTsReceiversList->end())
+				if (*it == this)
 				{
-					if (*it == this)
-					{
-						m_pTsReceiversList->erase(it);
-						break;
-					}
-					++it;
+					m_pTsReceiversList->erase(it);
+					break;
 				}
+				++it;
 			}
+			m_pTsLock->Leave();
 			// ‰Â”\«‚Í’á‚¢‚ªƒ[ƒ‚Å‚Í‚È‚¢c
 			if (m_pTsReceiversList->empty())
 			{
@@ -320,9 +319,9 @@ DWORD cProxyServer::Process()
 						}
 					}
 				}
-				if (m_hTsRead)
+				if (!bFind)
 				{
-					if (!bFind)
+					if (m_hTsRead)
 					{
 						*m_pStopTsRead = TRUE;
 						::WaitForSingleObject(m_hTsRead, INFINITE);
@@ -331,27 +330,28 @@ DWORD cProxyServer::Process()
 						delete m_pStopTsRead;
 						delete m_pTsLock;
 						delete m_ppos;
-						CloseTuner();
 					}
-					else
+					CloseTuner();
+				}
+				else
+				{
+					if (m_hTsRead)
 					{
-						{
 #ifndef STRICT_LOCK
-							LOCK(g_Lock);
+						LOCK(g_Lock);
 #endif
-							m_pTsLock->Enter();
-							std::list<cProxyServer *>::iterator it = m_pTsReceiversList->begin();
-							while (it != m_pTsReceiversList->end())
+						m_pTsLock->Enter();
+						std::list<cProxyServer *>::iterator it = m_pTsReceiversList->begin();
+						while (it != m_pTsReceiversList->end())
+						{
+							if (*it == this)
 							{
-								if (*it == this)
-								{
-									m_pTsReceiversList->erase(it);
-									break;
-								}
-								++it;
+								m_pTsReceiversList->erase(it);
+								break;
 							}
-							m_pTsLock->Leave();
+							++it;
 						}
+						m_pTsLock->Leave();
 						// ‰Â”\«‚Í’á‚¢‚ªƒ[ƒ‚Å‚Í‚È‚¢c
 						if (m_pTsReceiversList->empty())
 						{
@@ -364,12 +364,12 @@ DWORD cProxyServer::Process()
 							delete m_ppos;
 						}
 					}
-					m_hTsRead = NULL;
-					m_pTsReceiversList = NULL;
-					m_pStopTsRead = NULL;
-					m_pTsLock = NULL;
-					m_ppos = NULL;
 				}
+				m_hTsRead = NULL;
+				m_pTsReceiversList = NULL;
+				m_pStopTsRead = NULL;
+				m_pTsLock = NULL;
+				m_ppos = NULL;
 				m_bTunerOpen = FALSE;
 				break;
 			}
