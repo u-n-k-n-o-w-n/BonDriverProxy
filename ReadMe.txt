@@ -106,6 +106,9 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.4.10 (Jan/29/2015)
+	・通るべきCloseTuner()を通らないコードパスがあったのを修正
+
 version 1.1.4.9 (Jan/28/2015)
 	・BonDriverインスタンスを共有している複数のクライアントがほぼ同時にCloseTuner()した場合に、
 	  解放済みメモリにアクセスしてしまう場合があったのを修正
