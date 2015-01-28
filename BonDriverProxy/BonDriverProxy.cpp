@@ -5,7 +5,6 @@
 
 #if _DEBUG
 #define DETAILLOG	0
-static cProxyServer *debug;
 #endif
 
 static int Init(HMODULE hModule)
@@ -120,9 +119,6 @@ DWORD WINAPI cProxyServer::Reception(LPVOID pv)
 {
 	cProxyServer *pProxy = static_cast<cProxyServer *>(pv);
 	DWORD ret = pProxy->Process();
-#if _DEBUG
-	debug = NULL;
-#endif
 	delete pProxy;
 	return ret;
 }
@@ -142,10 +138,6 @@ DWORD cProxyServer::Process()
 		::CloseHandle(hThread[0]);
 		return 2;
 	}
-
-#if _DEBUG
-	debug = this;
-#endif
 
 	HANDLE h[2] = { m_Error, m_fifoRecv.GetEventHandle() };
 	for (;;)
@@ -328,25 +320,51 @@ DWORD cProxyServer::Process()
 						}
 					}
 				}
-				if (!bFind)
+				if (m_hTsRead)
 				{
-					if (m_hTsRead)
+					if (!bFind)
 					{
 						*m_pStopTsRead = TRUE;
 						::WaitForSingleObject(m_hTsRead, INFINITE);
 						::CloseHandle(m_hTsRead);
-						m_hTsRead = NULL;
-						m_pTsReceiversList->clear();
 						delete m_pTsReceiversList;
-						m_pTsReceiversList = NULL;
 						delete m_pStopTsRead;
-						m_pStopTsRead = NULL;
 						delete m_pTsLock;
-						m_pTsLock = NULL;
 						delete m_ppos;
-						m_ppos = NULL;
+						CloseTuner();
 					}
-					CloseTuner();
+					else
+					{
+						{
+							LOCK(*m_pTsLock);
+							std::list<cProxyServer *>::iterator it = m_pTsReceiversList->begin();
+							while (it != m_pTsReceiversList->end())
+							{
+								if (*it == this)
+								{
+									m_pTsReceiversList->erase(it);
+									break;
+								}
+								++it;
+							}
+						}
+						// ‰Â”\«‚Í’á‚¢‚ªƒ[ƒ‚Å‚Í‚È‚¢c
+						if (m_pTsReceiversList->empty())
+						{
+							*m_pStopTsRead = TRUE;
+							::WaitForSingleObject(m_hTsRead, INFINITE);
+							::CloseHandle(m_hTsRead);
+							delete m_pTsReceiversList;
+							delete m_pStopTsRead;
+							delete m_pTsLock;
+							delete m_ppos;
+						}
+					}
+					m_hTsRead = NULL;
+					m_pTsReceiversList = NULL;
+					m_pStopTsRead = NULL;
+					m_pTsLock = NULL;
+					m_ppos = NULL;
 				}
 				m_bTunerOpen = FALSE;
 				break;
@@ -1025,10 +1043,6 @@ static int Listen(char *host, char *port)
 #if _DEBUG
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
-	HDC hDc;
-	TCHAR buf[1024];
-	static int n = 0;
-
 	switch (iMsg)
 	{
 	case WM_CREATE:
@@ -1039,20 +1053,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		return 0;
 
 	case WM_PAINT:
+	{
 		PAINTSTRUCT ps;
-		hDc = BeginPaint(hWnd, &ps);
-		wsprintf(buf, TEXT("pProxy [%p] n[%d]"), debug, n);
-		TextOut(hDc, 0, 0, buf, (int)_tcslen(buf));
-		if (debug)
+		HDC hDc = BeginPaint(hWnd, &ps);
+		Rectangle(hDc, 0, 0, 512, 256);
+		LOCK(g_Lock);
+		int i = 0;
+		char buf[MAX_PATH + 8];
+		std::list<cProxyServer *>::iterator it = g_InstanceList.begin();
+		while (it != g_InstanceList.end())
 		{
-			wsprintf(buf, TEXT("send_fifo size[%d] recv_fifo size[%d]"), debug->m_fifoSend.Size(), debug->m_fifoRecv.Size());
-			TextOut(hDc, 0, 40, buf, (int)_tcslen(buf));
+			wsprintfA(buf, "%02d: [%s]", i, (*it)->m_strBonDriver);
+			TextOutA(hDc, 5, 5 + (i * 25), buf, lstrlenA(buf));
+			i++;
+			++it;
 		}
 		EndPaint(hWnd, &ps);
 		return 0;
+	}
 
 	case WM_LBUTTONDOWN:
-		n++;
 		InvalidateRect(hWnd, NULL, FALSE);
 		return 0;
 	}
@@ -1061,7 +1081,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-	static HANDLE hLogFile = CreateFile(_T("dbglog.txt"), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE hLogFile = CreateFile(_T("dbglog.txt"), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	_CrtMemState ostate, nstate, dstate;
+	_CrtMemCheckpoint(&ostate);
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE | _CRTDBG_MODE_DEBUG);
 	_CrtSetReportFile(_CRT_WARN, hLogFile);
@@ -1113,12 +1135,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		DispatchMessage(&msg);
 	}
 
-	delete debug;
-
 	WSACleanup();
 
+	_CrtMemCheckpoint(&nstate);
+	if (_CrtMemDifference(&dstate, &ostate, &nstate))
+	{
+		_CrtMemDumpStatistics(&dstate);
+		_CrtMemDumpAllObjectsSince(&ostate);
+	}
 	_RPT0(_CRT_WARN, "--- PROCESS_END ---\n");
-//	CloseHandle(hLogFile);
+	CloseHandle(hLogFile);
 
 	return (int)msg.wParam;
 }

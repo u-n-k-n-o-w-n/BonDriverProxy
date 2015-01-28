@@ -36,7 +36,6 @@ class cProxyServer {
 	HMODULE m_hModule;
 	SOCKET m_s;
 	cEvent m_Error;
-	char m_strBonDriver[MAX_PATH];
 	BOOL m_bTunerOpen;
 	HANDLE m_hTsRead;
 	std::list<cProxyServer *> *m_pTsReceiversList;
@@ -47,6 +46,7 @@ class cProxyServer {
 #if _DEBUG
 public:
 #endif
+	char m_strBonDriver[MAX_PATH];
 	cPacketFifo m_fifoSend;
 	cPacketFifo m_fifoRecv;
 
