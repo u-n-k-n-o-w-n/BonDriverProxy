@@ -106,6 +106,11 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.5.0 (Jan/30/2015)
+	・サーバ側で一旦ロードしたBonDriverを、使用クライアントがいなくなった時にFreeLibrary()するのを
+	  許可しない設定を追加
+	・クライアント側はバージョン表記のみの変更
+
 version 1.1.4.10 (Jan/29/2015)
 	・通るべきCloseTuner()を通らないコードパスがあったのを修正
 
