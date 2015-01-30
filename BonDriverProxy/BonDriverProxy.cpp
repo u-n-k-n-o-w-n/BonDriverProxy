@@ -25,11 +25,29 @@ static int Init(HMODULE hModule)
 	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
 	GetPrivateProfileStringA("OPTION", "PORT", "1192", g_Port, sizeof(g_Port), szIniPath);
 	g_SandBoxedRelease = GetPrivateProfileIntA("OPTION", "SANDBOXED_RELEASE", 0, szIniPath);
+	g_DisableUnloadBonDriver = GetPrivateProfileIntA("OPTION", "DISABLE_UNLOAD_BONDRIVER", 0, szIniPath);
 
 	g_PacketFifoSize = GetPrivateProfileIntA("SYSTEM", "PACKET_FIFO_SIZE", 64, szIniPath);
 	g_TsPacketBufSize = GetPrivateProfileIntA("SYSTEM", "TSPACKET_BUFSIZE", (188 * 1024), szIniPath);
 
 	return 0;
+}
+
+static void CleanUp()
+{
+	if (g_DisableUnloadBonDriver)
+	{
+		while (!g_LoadedDriverList.empty())
+		{
+			stLoadedDriver *pLd = g_LoadedDriverList.front();
+			g_LoadedDriverList.pop_front();
+			FreeLibrary(pLd->hModule);
+#if _DEBUG
+			_RPT1(_CRT_WARN, "[%s] unloaded\n", pLd->strBonDriver);
+#endif
+			delete pLd;
+		}
+	}
 }
 
 cProxyServer::cProxyServer() : m_Error(TRUE, FALSE)
@@ -78,7 +96,15 @@ cProxyServer::~cProxyServer()
 		Release();
 
 		if (m_hModule)
-			::FreeLibrary(m_hModule);
+		{
+			if (!g_DisableUnloadBonDriver)
+			{
+				::FreeLibrary(m_hModule);
+#if _DEBUG
+				_RPT1(_CRT_WARN, "[%s] unloaded\n", m_strBonDriver);
+#endif
+			}
+		}
 	}
 	else
 	{
@@ -162,39 +188,45 @@ DWORD cProxyServer::Process()
 					makePacket(eSelectBonDriver, FALSE);
 				else
 				{
-					BOOL bFind = FALSE;
-#ifndef STRICT_LOCK
-					LOCK(g_Lock);
-#endif
-					for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
-					{
-						if (::strcmp((LPCSTR)(pPh->m_pPacket->payload), (*it)->m_strBonDriver) == 0)
-						{
-							bFind = TRUE;
-							m_hModule = (*it)->m_hModule;
-							::strcpy(m_strBonDriver, (*it)->m_strBonDriver);
-							m_pIBon = (*it)->m_pIBon;	// (*it)->m_pIBonがNULLの可能性はゼロではない
-							m_pIBon2 = (*it)->m_pIBon2;
-							m_pIBon3 = (*it)->m_pIBon3;
-							break;
-						}
-					}
-					BOOL bSuccess;
-					if (!bFind)
-					{
-						bSuccess = SelectBonDriver((LPCSTR)(pPh->m_pPacket->payload));
-						if (bSuccess)
-						{
-							g_InstanceList.push_back(this);
-							::strcpy_s(m_strBonDriver, (LPCSTR)(pPh->m_pPacket->payload));
-						}
-					}
+					LPCSTR p = (LPCSTR)(pPh->m_pPacket->payload);
+					if (::strlen(p) > (sizeof(m_strBonDriver) - 1))
+						makePacket(eSelectBonDriver, FALSE);
 					else
 					{
-						g_InstanceList.push_back(this);
-						bSuccess = TRUE;
+						BOOL bFind = FALSE;
+#ifndef STRICT_LOCK
+						LOCK(g_Lock);
+#endif
+						for (std::list<cProxyServer *>::iterator it = g_InstanceList.begin(); it != g_InstanceList.end(); ++it)
+						{
+							if (::strcmp(p, (*it)->m_strBonDriver) == 0)
+							{
+								bFind = TRUE;
+								m_hModule = (*it)->m_hModule;
+								::strcpy(m_strBonDriver, (*it)->m_strBonDriver);
+								m_pIBon = (*it)->m_pIBon;	// (*it)->m_pIBonがNULLの可能性はゼロではない
+								m_pIBon2 = (*it)->m_pIBon2;
+								m_pIBon3 = (*it)->m_pIBon3;
+								break;
+							}
+						}
+						BOOL bSuccess;
+						if (!bFind)
+						{
+							bSuccess = SelectBonDriver(p);
+							if (bSuccess)
+							{
+								g_InstanceList.push_back(this);
+								::strcpy(m_strBonDriver, p);
+							}
+						}
+						else
+						{
+							g_InstanceList.push_back(this);
+							bSuccess = TRUE;
+						}
+						makePacket(eSelectBonDriver, bSuccess);
 					}
-					makePacket(eSelectBonDriver, bSuccess);
 				}
 				break;
 			}
@@ -868,8 +900,39 @@ BOOL cProxyServer::SelectBonDriver(LPCSTR p)
 {
 	if (p[0] == '\\' && p[1] == '\\')
 		return FALSE;
-	m_hModule = ::LoadLibraryA(p);
-	return (m_hModule != NULL);
+
+	HMODULE hModule = NULL;
+	BOOL bLoaded = FALSE;
+	for (std::list<stLoadedDriver *>::iterator it = g_LoadedDriverList.begin(); it != g_LoadedDriverList.end(); ++it)
+	{
+		if (::strcmp(p, (*it)->strBonDriver) == 0)
+		{
+			hModule = (*it)->hModule;
+			bLoaded = TRUE;
+			break;
+		}
+	}
+	if (hModule == NULL)
+	{
+		hModule = ::LoadLibraryA(p);
+		if (hModule == NULL)
+			return FALSE;
+#if _DEBUG
+		_RPT1(_CRT_WARN, "[%s] loaded\n", p);
+#endif
+	}
+
+	m_hModule = hModule;
+
+	if (g_DisableUnloadBonDriver && !bLoaded)
+	{
+		stLoadedDriver *pLd = new stLoadedDriver;
+		::strcpy(pLd->strBonDriver, p);	// stLoadedDriver::strBonDriverのサイズはProxyServer::m_strBonDriverと同じ
+		pLd->hModule = hModule;
+		g_LoadedDriverList.push_back(pLd);
+	}
+
+	return TRUE;
 }
 
 IBonDriver *cProxyServer::CreateBonDriver()
@@ -1139,6 +1202,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		DispatchMessage(&msg);
 	}
 
+	{
+		LOCK(g_Lock);
+		CleanUp();
+	}
+
 	WSACleanup();
 
 	_CrtMemCheckpoint(&nstate);
@@ -1163,6 +1231,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE/*hPrevInstance*/, LPSTR/*lpCmd
 		return -2;
 
 	int ret = Listen(g_Host, g_Port);
+
+	{
+		// 来ないけど一応
+		LOCK(g_Lock);
+		CleanUp();
+	}
+
 	WSACleanup();
 	return ret;
 }

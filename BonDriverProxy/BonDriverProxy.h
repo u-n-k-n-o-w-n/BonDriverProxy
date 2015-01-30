@@ -24,6 +24,12 @@ static char g_Port[8];
 static size_t g_PacketFifoSize;
 static DWORD g_TsPacketBufSize;
 static BOOL g_SandBoxedRelease;
+static BOOL g_DisableUnloadBonDriver;
+struct stLoadedDriver {
+	char strBonDriver[MAX_PATH];
+	HMODULE hModule;
+};
+static std::list<stLoadedDriver *> g_LoadedDriverList;
 
 #include "BdpPacket.h"
 

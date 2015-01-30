@@ -30,6 +30,7 @@ TSPACKET_BUFSIZE -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg192512 : 1‚Â‚ÌTSƒoƒbƒtƒ@‚ÌƒTƒCƒY(ƒoƒCƒ
 ADDRESS -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg127.0.0.1 : ‘Ò‚¿Žó‚¯‚É—˜—p‚·‚éƒAƒhƒŒƒX
 PORT -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg1192 : ‘Ò‚¿Žó‚¯ƒ|[ƒg
 SANDBOXED_RELEASE -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg0 : BonDriver‚É‘Î‚µ‚ÄRelease()‚ðŽŽ‚Ý‚éÛ‚ÉA‚»‚Ì“à•”‚Å”­¶‚µ‚½Access Violation“™‚ð–³Ž‹‚·‚é‚©‚Ç‚¤‚© / 1:yes 0:no
+DISABLE_UNLOAD_BONDRIVER -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg0 : ƒ[ƒh‚µ‚½BonDriver‚ðAŽg—pƒNƒ‰ƒCƒAƒ“ƒg‚ª‚¢‚È‚­‚È‚Á‚½Žž‚ÉFreeLibrary()‚·‚é‚Ì‚ð‹–‰Â‚µ‚È‚¢‚©‚Ç‚¤‚© / 1:yes 0:no
 
 [SYSTEM]
 PACKET_FIFO_SIZE -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg64 : ƒNƒ‰ƒCƒAƒ“ƒg‘¤‚Ì•¨‚Æ“¯‚¶
@@ -43,6 +44,7 @@ ADDRESS -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg127.0.0.1 : ƒT[ƒo‘¤(BonDriverProxy)‚Ì•¨‚Æ“¯‚¶
 PORT -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg1192 : ƒT[ƒo‘¤(BonDriverProxy)‚Ì•¨‚Æ“¯‚¶
 OPENTUNER_RETURN_DELAY -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg0 : BonDriver‚É‘Î‚µ‚ÄOpenTuner()‚ðŽŽ‚Ý‚½ŒãAˆÈŒã‚Ìˆ—‚ðŠJŽn‚·‚é‚Ü‚Å‚É‘Ò‚ÂŽžŠÔ(ƒ~ƒŠ•b)
 SANDBOXED_RELEASE -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg0 : ƒT[ƒo‘¤(BonDriverProxy)‚Ì•¨‚Æ“¯‚¶
+DISABLE_UNLOAD_BONDRIVER -> ƒIƒvƒVƒ‡ƒ“AƒfƒtƒHƒ‹ƒg0 : ƒT[ƒo‘¤(BonDriverProxy)‚Ì•¨‚Æ“¯‚¶
 
 [BONDRIVER]
 00 -> •’Ê‚Él‚¦‚é‚Æ•K{‚Å‚·‚ªA–³‚­‚Ä‚à‹N“®Ž©‘Ì‚Ío—ˆ‚Ä‚µ‚Ü‚¢‚Ü‚· : BonDriverƒOƒ‹[ƒv’è‹`
