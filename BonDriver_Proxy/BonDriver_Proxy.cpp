@@ -67,7 +67,7 @@ cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
 	m_LastBuf = NULL;
 	m_dwBufPos = 0;
 	::memset(m_pBuf, 0, sizeof(m_pBuf));
-	m_bBonDriver = m_bTuner = m_bRereased = FALSE;
+	m_bBonDriver = m_bTuner = m_bRereased = m_bWaitCNR = FALSE;
 	m_fSignalLevel = 0;
 	m_dwSpace = m_dwChannel = 0x7fffffff;	// INT_MAX
 //	m_hThread = NULL;
@@ -190,6 +190,7 @@ DWORD cProxyClient::Process()
 						} u;
 						u.dw = ::ntohl(*(DWORD *)&(pPh->m_pPacket->payload[sizeof(DWORD)]));
 						m_fSignalLevel = u.f;
+						m_bWaitCNR = FALSE;
 
 						pPh->SetDeleteFlag(FALSE);
 						TS_DATA *pData = new TS_DATA();
@@ -509,7 +510,7 @@ void cProxyClient::CloseTuner(void)
 		return;
 
 	makePacket(eCloseTuner);
-	m_bTuner = FALSE;
+	m_bTuner = m_bWaitCNR = FALSE;
 	m_fSignalLevel = 0;
 	m_dwSpace = m_dwChannel = 0x7fffffff;	// INT_MAX
 	{
@@ -528,6 +529,11 @@ const BOOL cProxyClient::SetChannel(const BYTE/*bCh*/)
 
 const float cProxyClient::GetSignalLevel(void)
 {
+	// イベントでやろうかと思ったけど、デッドロックを防ぐ為には発生する処理の回数の内大半では
+	// 全く無駄なイベント処理が発生する事になるので、ポーリングでやる事にした
+	// なお、絶妙なタイミングでのネットワーク切断等に備えて、最大でも約0.5秒までしか待たない
+	for (int i = 0; m_bWaitCNR && (i < 50); i++)
+		::Sleep(10);
 	return m_fSignalLevel;
 }
 
@@ -700,6 +706,8 @@ const BOOL cProxyClient::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 		TsFlush();
 		m_dwSpace = dwSpace;
 		m_dwChannel = dwChannel;
+		m_fSignalLevel = 0;
+		m_bWaitCNR = TRUE;
 	}
 	case 0x01:	// fall-through / チャンネルロックされてる
 		return TRUE;

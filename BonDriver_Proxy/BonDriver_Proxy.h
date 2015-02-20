@@ -164,6 +164,7 @@ class cProxyClient : public IBonDriver3 {
 	BOOL m_bBonDriver;
 	BOOL m_bTuner;
 	BOOL m_bRereased;
+	volatile BOOL m_bWaitCNR;
 	cCriticalSection m_writeLock;
 	cCriticalSection m_readLock;	// 一応ロックしてるけど、厳密には本来求めてるロックは保証できてない
 
