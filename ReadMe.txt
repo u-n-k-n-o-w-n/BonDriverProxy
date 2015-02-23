@@ -106,6 +106,14 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.5.2 (Feb/23/2015)
+	・クライアント側で、チャンネル変更後最初のTSバッファが受信されるまでGetSignalLevel()を
+	  ブロックするようにした
+	・サーバ側で、BonDriverに対して実際にSetChannel()が行われた場合、それ以降に送信される
+	  TSバッファとCNR値は、確実にチャンネル変更後に取得した物になるようにした
+	  ＃もっとも、結局はその先のBonDriver次第ではある
+	・サーバ側のTsReader()で使用する各変数を構造体にまとめた
+
 version 1.1.5.1 (Feb/02/2015)
 	・COMを使用するBonDriverへの対策を追加
 	  ＃BonDriverによっては内部でCOMの初期化/終了処理を行う物があるが、使い方によっては
