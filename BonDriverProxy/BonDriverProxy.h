@@ -35,6 +35,21 @@ static std::list<stLoadedDriver *> g_LoadedDriverList;
 
 ////////////////////////////////////////////////////////////////////////////////
 
+struct stTsReaderArg {
+	IBonDriver *pIBon;
+	volatile BOOL StopTsRead;
+	volatile BOOL ChannelChanged;
+	DWORD pos;
+	std::list<cProxyServer *> TsReceiversList;
+	cCriticalSection TsLock;
+	stTsReaderArg()
+	{
+		StopTsRead = FALSE;
+		ChannelChanged = TRUE;
+		pos = 0;
+	}
+};
+
 class cProxyServer {
 	IBonDriver *m_pIBon;
 	IBonDriver2 *m_pIBon2;
@@ -44,11 +59,8 @@ class cProxyServer {
 	cEvent m_Error;
 	BOOL m_bTunerOpen;
 	HANDLE m_hTsRead;
-	std::list<cProxyServer *> *m_pTsReceiversList;
-	BOOL * volatile m_pStopTsRead;
-	cCriticalSection *m_pTsLock;
-	DWORD *m_ppos;
 	BOOL m_bChannelLock;
+	stTsReaderArg *m_pTsReaderArg;
 #if _DEBUG
 public:
 #endif
