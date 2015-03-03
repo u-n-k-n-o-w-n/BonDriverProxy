@@ -143,9 +143,9 @@ enum enumpRes {
 class cProxyClient : public IBonDriver3 {
 	SOCKET m_s;
 //	HANDLE m_hThread;
-	volatile int m_iEndCount;
+	__declspec(align(4)) volatile LONG m_lEndCount;
 	cEvent m_Error;
-	cEvent m_SingleShot;
+	cEvent m_StartTrigger;
 	cPacketFifo m_fifoSend;
 	cPacketFifo m_fifoRecv;
 	cTSFifo m_fifoTS;
@@ -179,14 +179,14 @@ class cProxyClient : public IBonDriver3 {
 	void makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2, BOOL b);
 	static DWORD WINAPI Sender(LPVOID pv);
 	void TsFlush(){ m_fifoTS.Flush(); }
-	void SleepLock(int n){ while (m_iEndCount != n){ ::Sleep(1); }; }
+	void SleepLock(LONG n){ while (m_lEndCount != n){ ::Sleep(1); }; }
 
 public:
 	cProxyClient();
 	~cProxyClient();
 	void setSocket(SOCKET s){ m_s = s; }
 //	void setThreadHandle(HANDLE h){ m_hThread = h; }
-	DWORD WaitSingleShot(){ return m_SingleShot.Wait(m_Error); }
+	DWORD WaitStartTrigger(){ return m_StartTrigger.Wait(m_Error); }
 	static DWORD WINAPI ProcessEntry(LPVOID pv);
 
 	BOOL SelectBonDriver();

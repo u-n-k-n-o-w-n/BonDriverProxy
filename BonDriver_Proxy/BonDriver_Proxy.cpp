@@ -61,7 +61,7 @@ static int Init(HMODULE hModule)
 	return 0;
 }
 
-cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
+cProxyClient::cProxyClient() : m_Error(TRUE, FALSE), m_StartTrigger(TRUE, FALSE)
 {
 	m_s = INVALID_SOCKET;
 	m_LastBuf = NULL;
@@ -71,7 +71,7 @@ cProxyClient::cProxyClient() : m_Error(TRUE, FALSE)
 	m_fSignalLevel = 0;
 	m_dwSpace = m_dwChannel = 0x7fffffff;	// INT_MAX
 //	m_hThread = NULL;
-	m_iEndCount = -1;
+	m_lEndCount = -1;
 }
 
 cProxyClient::~cProxyClient()
@@ -85,7 +85,7 @@ cProxyClient::~cProxyClient()
 
 	m_Error.Set();
 
-	if (m_iEndCount != -1)
+	if (m_lEndCount != -1)
 		SleepLock(3);
 
 //	if (m_hThread != NULL)
@@ -108,9 +108,9 @@ DWORD WINAPI cProxyClient::ProcessEntry(LPVOID pv)
 	cProxyClient *pProxy = static_cast<cProxyClient *>(pv);
 	DWORD ret = pProxy->Process();
 	if (ret == 0)
-		pProxy->m_iEndCount++;
+		pProxy->m_lEndCount++;
 	else
-		pProxy->m_iEndCount = -1;
+		pProxy->m_lEndCount = -1;
 	return ret;
 }
 
@@ -133,8 +133,8 @@ DWORD cProxyClient::Process()
 		return 2;
 	}
 
-	m_iEndCount = 0;
-	m_SingleShot.Set();
+	m_lEndCount = 0;
+	m_StartTrigger.Set();
 
 	HANDLE h[2] = { m_Error, m_fifoRecv.GetEventHandle() };
 	for (;;)
@@ -320,6 +320,7 @@ DWORD WINAPI cProxyClient::Receiver(LPVOID pv)
 	cPacketHolder *pPh = NULL;
 	const DWORD MaxPacketBufSize = g_TsPacketBufSize + (sizeof(DWORD) * 2);
 
+	pProxy->WaitStartTrigger();
 	for (;;)
 	{
 		pPh = new cPacketHolder(MaxPacketBufSize);
@@ -363,7 +364,7 @@ DWORD WINAPI cProxyClient::Receiver(LPVOID pv)
 	}
 end:
 	delete pPh;
-	pProxy->m_iEndCount++;
+	::InterlockedIncrement(&(pProxy->m_lEndCount));
 	return ret;
 }
 
@@ -420,6 +421,8 @@ DWORD WINAPI cProxyClient::Sender(LPVOID pv)
 	cProxyClient *pProxy = static_cast<cProxyClient *>(pv);
 	DWORD ret;
 	HANDLE h[2] = { pProxy->m_Error, pProxy->m_fifoSend.GetEventHandle() };
+
+	pProxy->WaitStartTrigger();
 	for (;;)
 	{
 		DWORD dwRet = ::WaitForMultipleObjects(2, h, FALSE, INFINITE);
@@ -458,7 +461,7 @@ DWORD WINAPI cProxyClient::Sender(LPVOID pv)
 		}
 	}
 end:
-	pProxy->m_iEndCount++;
+	::InterlockedIncrement(&(pProxy->m_lEndCount));
 	return ret;
 }
 
@@ -885,7 +888,7 @@ extern "C" __declspec(dllexport) IBonDriver *CreateBonDriver()
 		goto err;
 //	pProxy->setThreadHandle(hThread);
 
-	if (pProxy->WaitSingleShot() == WAIT_OBJECT_0)
+	if (pProxy->WaitStartTrigger() == WAIT_OBJECT_0)
 		goto err;
 
 	if (!pProxy->SelectBonDriver())
