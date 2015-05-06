@@ -9,6 +9,8 @@
 #include "Common.h"
 #include "IBonDriver3.h"
 
+#define HAVE_UI
+
 #if _DEBUG
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
@@ -51,20 +53,23 @@ struct stTsReaderArg {
 };
 
 class cProxyServer {
+#ifdef HAVE_UI
+public:
+#endif
+	SOCKET m_s;
+	char m_strBonDriver[MAX_PATH];
+#ifdef HAVE_UI
+private:
+#endif
 	IBonDriver *m_pIBon;
 	IBonDriver2 *m_pIBon2;
 	IBonDriver3 *m_pIBon3;
 	HMODULE m_hModule;
-	SOCKET m_s;
 	cEvent m_Error;
 	BOOL m_bTunerOpen;
 	HANDLE m_hTsRead;
 	BOOL m_bChannelLock;
 	stTsReaderArg *m_pTsReaderArg;
-#if _DEBUG
-public:
-#endif
-	char m_strBonDriver[MAX_PATH];
 	cPacketFifo m_fifoSend;
 	cPacketFifo m_fifoRecv;
 
@@ -104,6 +109,9 @@ public:
 	cProxyServer();
 	~cProxyServer();
 	void setSocket(SOCKET s){ m_s = s; }
+#ifdef HAVE_UI
+	void Shutdown(){ m_Error.Set(); }
+#endif
 	static DWORD WINAPI Reception(LPVOID pv);
 };
 

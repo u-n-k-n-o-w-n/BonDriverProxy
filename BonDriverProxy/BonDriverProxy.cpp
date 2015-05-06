@@ -7,6 +7,17 @@
 #define DETAILLOG	0
 #endif
 
+#ifdef HAVE_UI
+#define WM_TASKTRAY			(WM_USER + 1)
+#define ID_TASKTRAY			0
+#define ID_TASKTRAY_SHOW	1
+#define ID_TASKTRAY_HIDE	2
+#define ID_TASKTRAY_EXIT	3
+HINSTANCE g_hInstance;
+HWND g_hWnd;
+HMENU g_hMenu;
+#endif
+
 static int Init(HMODULE hModule)
 {
 	char szIniPath[MAX_PATH + 16] = { '\0' };
@@ -141,6 +152,10 @@ DWORD WINAPI cProxyServer::Reception(LPVOID pv)
 	DWORD ret = pProxy->Process();
 	delete pProxy;
 
+#ifdef HAVE_UI
+	::InvalidateRect(g_hWnd, NULL, FALSE);
+#endif
+
 	if (SUCCEEDED(hr))
 		::CoUninitialize();
 
@@ -225,6 +240,10 @@ DWORD cProxyServer::Process()
 							bSuccess = TRUE;
 						}
 						makePacket(eSelectBonDriver, bSuccess);
+#ifdef HAVE_UI
+						if (bSuccess)
+							::InvalidateRect(g_hWnd, NULL, FALSE);
+#endif
 					}
 				}
 				break;
@@ -1013,7 +1032,7 @@ const BOOL cProxyServer::SetLnbPower(const BOOL bEnable)
 	return b;
 }
 
-#if _DEBUG
+#ifdef HAVE_UI
 struct HostInfo{
 	char *host;
 	char *port;
@@ -1084,12 +1103,47 @@ static int Listen(char *host, char *port)
 	return 0;	// ここには来ない
 }
 
-#if _DEBUG
+#ifdef HAVE_UI
+void NotifyIcon(int mode)
+{
+	NOTIFYICONDATA nid = {};
+	nid.cbSize = sizeof(nid);
+	nid.hWnd = g_hWnd;
+	nid.uID = ID_TASKTRAY;
+	if (mode == 0)
+	{
+		// ADD
+		nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+		nid.uCallbackMessage = WM_TASKTRAY;
+		nid.hIcon = LoadIcon(g_hInstance, _T("BDP_ICON"));
+		lstrcpy(nid.szTip, _T("BonDriverProxy"));
+		for (;;)
+		{
+			if (Shell_NotifyIcon(NIM_ADD, &nid))
+				break;	// 登録成功
+			if (GetLastError() != ERROR_TIMEOUT)
+				break;	// タイムアウト以外のエラーなので諦める
+			Sleep(500);	// ちょっと待ってから確認
+			if (Shell_NotifyIcon(NIM_MODIFY, &nid))
+				break;	// 登録成功してた
+		}
+	}
+	else
+	{
+		// DEL
+		nid.uFlags = 0;
+		Shell_NotifyIcon(NIM_DELETE, &nid);
+	}
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
+	static UINT s_iTaskbarRestart;
+
 	switch (iMsg)
 	{
 	case WM_CREATE:
+		s_iTaskbarRestart = RegisterWindowMessage(_T("TaskbarCreated"));
 		return 0;
 
 	case WM_DESTROY:
@@ -1099,32 +1153,128 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
+		RECT rect;
+		GetClientRect(hWnd, &rect);
 		HDC hDc = BeginPaint(hWnd, &ps);
-		Rectangle(hDc, 0, 0, 512, 256);
-		LOCK(g_Lock);
-		int i = 0;
-		char buf[MAX_PATH + 8];
+		TEXTMETRIC tm;
+		GetTextMetrics(hDc, &tm);
+		Rectangle(hDc, 0, 0, rect.right, rect.bottom);
+		SOCKADDR_STORAGE ss;
+		char addr[INET6_ADDRSTRLEN];
+		int port, len, num = 0;
+		char buf[512];
+		g_Lock.Enter();
 		std::list<cProxyServer *>::iterator it = g_InstanceList.begin();
 		while (it != g_InstanceList.end())
 		{
-			wsprintfA(buf, "%02d: [%s]", i, (*it)->m_strBonDriver);
-			TextOutA(hDc, 5, 5 + (i * 25), buf, lstrlenA(buf));
-			i++;
+			len = sizeof(ss);
+			if (getpeername((*it)->m_s, (SOCKADDR *)&ss, &len) == 0)
+			{
+				if (ss.ss_family == AF_INET)
+				{
+					// IPv4
+					SOCKADDR_IN *p4 = (SOCKADDR_IN *)&ss;
+					inet_ntop(AF_INET, &(p4->sin_addr), addr, sizeof(addr));
+					port = ntohs(p4->sin_port);
+				}
+				else
+				{
+					// IPv6
+					SOCKADDR_IN6 *p6 = (SOCKADDR_IN6 *)&ss;
+					inet_ntop(AF_INET6, &(p6->sin6_addr), addr, sizeof(addr));
+					port = ntohs(p6->sin6_port);
+				}
+			}
+			else
+			{
+				lstrcpyA(addr, "unknown host...");
+				port = 0;
+			}
+			wsprintfA(buf, "%02d: [%s]:[%d] / [%s]", num, addr, port, (*it)->m_strBonDriver);
+			TextOutA(hDc, 5, 5 + (num * tm.tmHeight), buf, lstrlenA(buf));
+			num++;
 			++it;
 		}
+		g_Lock.Leave();
 		EndPaint(hWnd, &ps);
 		return 0;
 	}
 
-	case WM_LBUTTONDOWN:
-		InvalidateRect(hWnd, NULL, FALSE);
-		return 0;
+	case WM_TASKTRAY:
+	{
+		switch (LOWORD(lParam))
+		{
+		case WM_LBUTTONDOWN:
+		case WM_RBUTTONDOWN:
+			POINT pt;
+			GetCursorPos(&pt);
+			SetForegroundWindow(hWnd);
+			TrackPopupMenu(g_hMenu, TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hWnd, NULL);
+			PostMessage(hWnd, WM_NULL, 0, 0);
+			return 0;
+		}
+		break;
+	}
+
+	case WM_COMMAND:
+	{
+		switch (LOWORD(wParam))
+		{
+		case ID_TASKTRAY_SHOW:
+		{
+			ModifyMenu(g_hMenu, 0, MF_BYPOSITION | MF_STRING, ID_TASKTRAY_HIDE, _T("情報ウィンドウ非表示"));
+			ShowWindow(g_hWnd, SW_SHOW);
+			return 0;
+		}
+
+		case ID_TASKTRAY_HIDE:
+		{
+			ModifyMenu(g_hMenu, 0, MF_BYPOSITION | MF_STRING, ID_TASKTRAY_SHOW, _T("情報ウィンドウ表示"));
+			ShowWindow(g_hWnd, SW_HIDE);
+			return 0;
+		}
+
+		case ID_TASKTRAY_EXIT:
+		{
+			if (g_InstanceList.size() != 0)
+			{
+				if (MessageBox(hWnd, _T("接続中のクライアントが存在していますが、よろしいですか？"), _T("Caution"), MB_YESNO) != IDYES)
+					break;
+			}
+			g_Lock.Enter();
+			std::list<cProxyServer *>::iterator it = g_InstanceList.begin();
+			while (it != g_InstanceList.end())
+			{
+				(*it)->Shutdown();
+				++it;
+			}
+			g_Lock.Leave();
+			size_t num;
+			do
+			{
+				Sleep(100);
+				g_Lock.Enter();
+				num = g_InstanceList.size();
+				g_Lock.Leave();
+			} while (num != 0);
+			PostQuitMessage(0);
+			return 0;
+		}
+		}
+		break;
+	}
+
+	default:
+		if (iMsg == s_iTaskbarRestart)
+			NotifyIcon(0);
+		break;
 	}
 	return DefWindowProc(hWnd, iMsg, wParam, lParam);
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE/*hPrevInstance*/, LPSTR/*lpCmdLine*/, int/*nCmdShow*/)
 {
+#if _DEBUG
 	HANDLE hLogFile = CreateFile(_T("dbglog.txt"), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	_CrtMemState ostate, nstate, dstate;
 	_CrtMemCheckpoint(&ostate);
@@ -1135,9 +1285,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	_CrtSetReportFile(_CRT_ERROR, hLogFile);
 	_RPT0(_CRT_WARN, "--- PROCESS_START ---\n");
 //	int *p = new int[2];	// リーク検出テスト用
+#endif
 
 	if (Init(hInstance) != 0)
+	{
+		MessageBox(NULL, _T("iniファイルが見つかりません"), _T("Error"), MB_OK);
 		return -1;
+	}
 
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
@@ -1149,7 +1303,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	HANDLE hThread = CreateThread(NULL, 0, Listen, &hinfo, 0, NULL);
 	CloseHandle(hThread);
 
-	HWND hWnd;
 	MSG msg;
 	WNDCLASSEX wndclass;
 
@@ -1159,19 +1312,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wndclass.cbClsExtra = 0;
 	wndclass.cbWndExtra = 0;
 	wndclass.hInstance = hInstance;
-	wndclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+	wndclass.hIcon = LoadIcon(hInstance, _T("BDP_ICON"));
 	wndclass.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wndclass.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 	wndclass.lpszMenuName = NULL;
-	wndclass.lpszClassName = _T("Debug");
-	wndclass.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+	wndclass.lpszClassName = _T("bdp");
+	wndclass.hIconSm = LoadIcon(hInstance, _T("BDP_ICON"));
 
 	RegisterClassEx(&wndclass);
 
-	hWnd = CreateWindow(_T("Debug"), _T("Debug"), WS_OVERLAPPEDWINDOW, 256, 256, 512, 256, NULL, NULL, hInstance, NULL);
+	g_hWnd = CreateWindow(_T("bdp"), _T("Information"), WS_OVERLAPPED | WS_THICKFRAME, CW_USEDEFAULT, 0, 640, 320, NULL, NULL, hInstance, NULL);
 
-	ShowWindow(hWnd, nCmdShow);
-	UpdateWindow(hWnd);
+//	ShowWindow(g_hWnd, nCmdShow);
+//	UpdateWindow(g_hWnd);
+
+	g_hInstance = hInstance;
+	g_hMenu = CreatePopupMenu();
+	InsertMenu(g_hMenu, 0, MF_BYPOSITION | MF_STRING, ID_TASKTRAY_SHOW, _T("情報ウィンドウ表示"));
+	InsertMenu(g_hMenu, 1, MF_BYPOSITION | MF_STRING, ID_TASKTRAY_EXIT, _T("終了"));
+	NotifyIcon(0);
 
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
@@ -1179,13 +1338,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		DispatchMessage(&msg);
 	}
 
-	{
-		LOCK(g_Lock);
-		CleanUp();
-	}
+	g_Lock.Enter();
+	CleanUp();
+	g_Lock.Leave();
+
+	NotifyIcon(1);
+	DestroyMenu(g_hMenu);
 
 	WSACleanup();
 
+#if _DEBUG
 	_CrtMemCheckpoint(&nstate);
 	if (_CrtMemDifference(&dstate, &ostate, &nstate))
 	{
@@ -1194,6 +1356,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 	_RPT0(_CRT_WARN, "--- PROCESS_END ---\n");
 	CloseHandle(hLogFile);
+#endif
 
 	return (int)msg.wParam;
 }
