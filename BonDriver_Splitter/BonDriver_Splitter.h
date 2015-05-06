@@ -61,7 +61,7 @@ struct TS_DATA {
 	BYTE *pbBuf;
 	DWORD dwSize;
 	TS_DATA(BYTE *pb, DWORD dw) : pbBuf(pb), dwSize(dw){}
-	~TS_DATA(){	delete[] pbBuf;	}
+	~TS_DATA(){ delete[] pbBuf; }
 };
 
 class cTSFifo : protected std::queue<TS_DATA *> {
