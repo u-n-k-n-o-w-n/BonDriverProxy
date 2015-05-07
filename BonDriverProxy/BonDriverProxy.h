@@ -112,9 +112,6 @@ public:
 	cProxyServer();
 	~cProxyServer();
 	void setSocket(SOCKET s){ m_s = s; }
-#ifdef HAVE_UI
-	void Shutdown(){ m_Error.Set(); }
-#endif
 	static DWORD WINAPI Reception(LPVOID pv);
 };
 
