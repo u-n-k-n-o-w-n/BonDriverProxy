@@ -27,6 +27,9 @@ static size_t g_PacketFifoSize;
 static DWORD g_TsPacketBufSize;
 static BOOL g_SandBoxedRelease;
 static BOOL g_DisableUnloadBonDriver;
+static DWORD g_ProcessPriority;
+static int g_ThreadPriorityTsReader;
+static int g_ThreadPrioritySender;
 struct stLoadedDriver {
 	char strBonDriver[MAX_PATH];
 	HMODULE hModule;
