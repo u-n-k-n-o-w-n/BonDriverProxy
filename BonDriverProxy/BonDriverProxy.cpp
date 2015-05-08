@@ -93,7 +93,7 @@ static int Init(HMODULE hModule)
 	return 0;
 }
 
-#if defined(HAVE_UI)
+#if defined(HAVE_UI) || defined(BUILD_AS_SERVICE)
 static void ShutdownInstances()
 {
 	// シャットダウンイベントトリガ
@@ -1122,7 +1122,7 @@ const BOOL cProxyServer::SetLnbPower(const BOOL bEnable)
 	return b;
 }
 
-#ifdef HAVE_UI
+#if defined(HAVE_UI) || defined(BUILD_AS_SERVICE)
 struct HostInfo{
 	char *host;
 	char *port;
@@ -1207,6 +1207,7 @@ static int Listen(char *host, char *port)
 	return 0;
 }
 
+#ifndef BUILD_AS_SERVICE
 #ifdef HAVE_UI
 void NotifyIcon(int mode)
 {
@@ -1283,14 +1284,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 				{
 					// IPv4
 					SOCKADDR_IN *p4 = (SOCKADDR_IN *)&ss;
+#ifdef _WIN64
 					inet_ntop(AF_INET, &(p4->sin_addr), addr, sizeof(addr));
+#else
+					lstrcpyA(addr, inet_ntoa(p4->sin_addr));
+#endif
 					port = ntohs(p4->sin_port);
 				}
 				else
 				{
 					// IPv6
 					SOCKADDR_IN6 *p6 = (SOCKADDR_IN6 *)&ss;
+#ifdef _WIN64
 					inet_ntop(AF_INET6, &(p6->sin6_addr), addr, sizeof(addr));
+#else
+					char *p = addr;
+					for (int i = 0; i < 16; i += 2)
+						p += wsprintfA(p, "%02x%02x%c", p6->sin6_addr.s6_addr[i], p6->sin6_addr.s6_addr[i + 1], (i != 14) ? ':' : '\0');
+#endif
 					port = ntohs(p6->sin6_port);
 				}
 			}
@@ -1511,4 +1522,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE/*hPrevInstance*/, LPSTR/*lpCmd
 	WSACleanup();
 	return ret;
 }
+#endif
+#else
+#include "ServiceMain.cpp"
 #endif

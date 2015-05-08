@@ -10,6 +10,9 @@
 #include "IBonDriver3.h"
 
 #define HAVE_UI
+#ifdef BUILD_AS_SERVICE
+#undef HAVE_UI
+#endif
 
 #if _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -76,9 +79,6 @@ private:
 	cPacketFifo m_fifoSend;
 	cPacketFifo m_fifoRecv;
 
-#if _DEBUG
-private:
-#endif
 	DWORD Process();
 	int ReceiverHelper(char *pDst, DWORD left);
 	static DWORD WINAPI Receiver(LPVOID pv);
@@ -118,7 +118,7 @@ public:
 static std::list<cProxyServer *> g_InstanceList;
 static cCriticalSection g_Lock;
 static cEvent g_ShutdownEvent(TRUE, FALSE);
-#if defined(HAVE_UI)
+#if defined(HAVE_UI) || defined(BUILD_AS_SERVICE)
 static HANDLE g_hListenThread;
 #endif
 
