@@ -1186,7 +1186,10 @@ static int Listen(char *host, char *port)
 		FD_ZERO(&rd);
 		FD_SET(lsock, &rd);
 		if ((len = select((int)(lsock + 1), &rd, NULL, NULL, &tv)) == SOCKET_ERROR)
+		{
+			closesocket(lsock);
 			return 4;
+		}
 		if (len > 0)
 		{
 			csock = accept(lsock, NULL, NULL);
