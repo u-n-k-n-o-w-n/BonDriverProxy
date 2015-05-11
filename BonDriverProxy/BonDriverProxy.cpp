@@ -113,7 +113,7 @@ static void ShutdownInstances()
 	// 全クライアントインスタンスの終了を待つ
 	for (;;)
 	{
-		// g_InstanceListの数確認でわざわざロックしてるのは、cProxyServerExインスタンスが
+		// g_InstanceListの数確認でわざわざロックしてるのは、cProxyServerインスタンスが
 		// "リストからは削除されていてもデストラクタが終了していない"状態を排除する為
 		g_Lock.Enter();
 		size_t num = g_InstanceList.size();
