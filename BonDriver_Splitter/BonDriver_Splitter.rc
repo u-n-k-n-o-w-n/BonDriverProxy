@@ -6,8 +6,8 @@ LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
 // Version
 //
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,2
- PRODUCTVERSION 1,0,0,2
+ FILEVERSION 1,0,0,3
+ PRODUCTVERSION 1,0,0,3
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -23,12 +23,12 @@ BEGIN
         BLOCK "041104b0"
         BEGIN
             VALUE "FileDescription", "BonDriver Service Splitter"
-            VALUE "FileVersion", "1.0.0.2"
+            VALUE "FileVersion", "1.0.0.3"
             VALUE "InternalName", "BonDriver_Splitter"
             VALUE "LegalCopyright", "2015 unknown"
             VALUE "OriginalFilename", "BonDriver_Splitter.dll"
             VALUE "ProductName", "BonDriver Service Splitter"
-            VALUE "ProductVersion", "1.0.0.2"
+            VALUE "ProductVersion", "1.0.0.3"
         END
     END
     BLOCK "VarFileInfo"
