@@ -315,6 +315,7 @@ void cBonDriverSplitter::CloseTuner(void)
 			{
 				m_bStopTsRead = TRUE;
 				::WaitForSingleObject(m_hTsRead, INFINITE);
+				::CloseHandle(m_hTsRead);
 				m_hTsRead = NULL;
 			}
 			m_pIBon2->CloseTuner();
@@ -538,6 +539,7 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 						{
 							m_bStopTsRead = TRUE;
 							::WaitForSingleObject(m_hTsRead, INFINITE);
+							::CloseHandle(m_hTsRead);
 							m_hTsRead = NULL;
 						}
 						m_pIBon2->CloseTuner();
@@ -733,6 +735,7 @@ DWORD WINAPI cBonDriverSplitter::TsReader(LPVOID pv)
 	{
 		pThis->m_StopTsSplit.Set();
 		::WaitForSingleObject(pThis->m_hTsSplit, INFINITE);
+		::CloseHandle(pThis->m_hTsSplit);
 		pThis->m_hTsSplit = NULL;
 		pThis->m_StopTsSplit.Reset();
 	}
