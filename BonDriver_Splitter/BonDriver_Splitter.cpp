@@ -49,7 +49,7 @@ static int Init(HMODULE hModule)
 	GetPrivateProfileStringA("OPTION", "DEL", "", buf, sizeof(buf), szIniPath);
 	if (buf[0] != '\0')
 	{
-		const char *name[] = { "CAT", "NIT", "SDT", "EIT", "TOT", "BIT", "CDT", "ECM", "EMM", NULL };
+		const char *name[] = { "CAT", "NIT", "SDT", "EIT", "TOT", "BIT", "CDT", "ECM", "EMM", "TYPED", NULL };
 		p = buf;
 		int n, cnt = 1;
 		while (*p != '\0')
@@ -752,15 +752,16 @@ DWORD WINAPI cBonDriverSplitter::TsReader(LPVOID pv)
 struct pid_set {
 	int bits[MAX_PID / (8 * sizeof(int))];
 };
-#define FLAG_CAT 0x0001
-#define FLAG_NIT 0x0002
-#define FLAG_SDT 0x0004
-#define FLAG_EIT 0x0008
-#define FLAG_TOT 0x0010
-#define FLAG_BIT 0x0020
-#define FLAG_CDT 0x0040
-#define FLAG_ECM 0x0080
-#define FLAG_EMM 0x0100
+#define FLAG_CAT	0x0001
+#define FLAG_NIT	0x0002
+#define FLAG_SDT	0x0004
+#define FLAG_EIT	0x0008
+#define FLAG_TOT	0x0010
+#define FLAG_BIT	0x0020
+#define FLAG_CDT	0x0040
+#define FLAG_ECM	0x0080
+#define FLAG_EMM	0x0100
+#define FLAG_TYPED	0x0200
 DWORD WINAPI cBonDriverSplitter::TsSplitter(LPVOID pv)
 {
 	cBonDriverSplitter *pThis = static_cast<cBonDriverSplitter *>(pv);
@@ -1168,7 +1169,7 @@ DWORD WINAPI cBonDriverSplitter::TsSplitter(LPVOID pv)
 							bSplitPMT = FALSE;
 							goto next;
 						}
-						if (p[off] != 0x0d)	// stream_type "ISO/IEC 13818-6 type D"ÇÕîjä¸
+						if ((p[off] != 0x0d) || !(g_dwDelFlag & FLAG_TYPED))	// stream_type "ISO/IEC 13818-6 type D"à»äOÇÕñ≥èåèÇ≈écÇ∑
 						{
 							pid = GetPID(&p[off + 1]);
 							PID_SET(pid, p_new_pids);
