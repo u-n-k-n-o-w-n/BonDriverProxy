@@ -74,7 +74,7 @@ private:
 	cEvent m_Error;
 	BOOL m_bTunerOpen;
 	HANDLE m_hTsRead;
-	BOOL m_bChannelLock;
+	BYTE m_bChannelLock;
 	stTsReaderArg *m_pTsReaderArg;
 	cPacketFifo m_fifoSend;
 	cPacketFifo m_fifoRecv;

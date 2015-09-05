@@ -151,7 +151,8 @@ cProxyServer::cProxyServer() : m_Error(TRUE, FALSE)
 	m_hModule = NULL;
 	m_pIBon = m_pIBon2 = m_pIBon3 = NULL;
 	m_strBonDriver[0] = '\0';
-	m_bTunerOpen = m_bChannelLock = FALSE;
+	m_bTunerOpen = FALSE;
+	m_bChannelLock = 0;
 	m_hTsRead = NULL;
 	m_pTsReaderArg = NULL;
 }
@@ -502,13 +503,27 @@ DWORD cProxyServer::Process()
 
 			case ePurgeTsStream:
 			{
-				if (m_hTsRead && m_bChannelLock)
+				if (m_hTsRead)
 				{
+					BOOL bLocked = FALSE;
 					m_pTsReaderArg->TsLock.Enter();
-					PurgeTsStream();
-					m_pTsReaderArg->pos = 0;
+					std::list<cProxyServer *>::iterator it = m_pTsReaderArg->TsReceiversList.begin();
+					while (it != m_pTsReaderArg->TsReceiversList.end())
+					{
+						if ((*it != this) && (((*it)->m_bChannelLock > m_bChannelLock) || ((*it)->m_bChannelLock == 0xff)))
+						{
+							bLocked = TRUE;
+							break;
+						}
+						++it;
+					}
+					if (!bLocked)
+					{
+						PurgeTsStream();
+						m_pTsReaderArg->pos = 0;
+					}
 					m_pTsReaderArg->TsLock.Leave();
-					makePacket(ePurgeTsStream, TRUE);
+					makePacket(ePurgeTsStream, (!bLocked ? TRUE : FALSE));
 				}
 				else
 					makePacket(ePurgeTsStream, FALSE);
@@ -567,8 +582,16 @@ DWORD cProxyServer::Process()
 								continue;
 							if ((m_pIBon != NULL) && (m_pIBon == (*it)->m_pIBon))
 							{
-								if ((*it)->m_bChannelLock)
+								if ((*it)->m_bChannelLock > m_bChannelLock)
 									bLocked = TRUE;
+								else if ((*it)->m_bChannelLock == 0xff)
+								{
+									// 対象チューナに対して優先度255のインスタンスが既にいる状態で、このインスタンスが
+									// 要求している優先度も255の場合、このインスタンスの優先度を暫定的に254にする
+									// (そうしないと、優先度255のインスタンスもチャンネル変更できなくなる為)
+									m_bChannelLock = 0xfe;
+									bLocked = TRUE;
+								}
 								if ((m_hTsRead == NULL) && ((*it)->m_hTsRead != NULL))
 								{
 									m_hTsRead = (*it)->m_hTsRead;
@@ -580,7 +603,7 @@ DWORD cProxyServer::Process()
 							}
 						}
 					}
-					if (bLocked && !m_bChannelLock)
+					if (bLocked)
 						makePacket(eSetChannel2, (DWORD)0x01);
 					else
 					{

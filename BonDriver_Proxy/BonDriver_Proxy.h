@@ -24,7 +24,7 @@
 static char g_Host[MAX_HOST_LEN];
 static char g_Port[MAX_PORT_LEN];
 static char g_BonDriver[MAX_PATH];
-static BOOL g_ChannelLock;
+static BYTE g_ChannelLock;
 static size_t g_PacketFifoSize;
 static size_t g_TsFifoSize;
 static DWORD g_TsPacketBufSize;
@@ -176,7 +176,7 @@ class cProxyClient : public IBonDriver3 {
 	void makePacket(enumCommand eCmd, BOOL b);
 	void makePacket(enumCommand eCmd, DWORD dw);
 	void makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2);
-	void makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2, BOOL b);
+	void makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2, BYTE b);
 	static DWORD WINAPI Sender(LPVOID pv);
 	void TsFlush(){ m_fifoTS.Flush(); }
 	void SleepLock(LONG n){ while (m_lEndCount != n){ ::Sleep(1); }; }

@@ -6,8 +6,8 @@ LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
 // Version
 //
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,5,2
- PRODUCTVERSION 1,1,5,2
+ FILEVERSION 1,1,6,0
+ PRODUCTVERSION 1,1,6,0
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -23,12 +23,12 @@ BEGIN
         BLOCK "041104b0"
         BEGIN
             VALUE "FileDescription", "BonDriverProxy Client Driver"
-            VALUE "FileVersion", "1.1.5.2"
+            VALUE "FileVersion", "1.1.6.0"
             VALUE "InternalName", "BonDriver_Proxy"
             VALUE "LegalCopyright", "2014 unknown"
             VALUE "OriginalFilename", "BonDriver_Proxy.dll"
             VALUE "ProductName", "BonDriverProxy Driver"
-            VALUE "ProductVersion", "1.1.5.2"
+            VALUE "ProductVersion", "1.1.6.0"
         END
     END
     BLOCK "VarFileInfo"

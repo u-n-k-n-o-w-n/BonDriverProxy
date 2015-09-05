@@ -23,7 +23,7 @@ static int Init(HMODULE hModule)
 	GetPrivateProfileStringA("OPTION", "ADDRESS", "127.0.0.1", g_Host, sizeof(g_Host), szIniPath);
 	GetPrivateProfileStringA("OPTION", "PORT", "1192", g_Port, sizeof(g_Port), szIniPath);
 	GetPrivateProfileStringA("OPTION", "BONDRIVER", "BonDriver_ptmr.dll", g_BonDriver, sizeof(g_BonDriver), szIniPath);
-	g_ChannelLock = (BOOL)GetPrivateProfileIntA("OPTION", "CHANNEL_LOCK", 0, szIniPath);
+	g_ChannelLock = (BYTE)GetPrivateProfileIntA("OPTION", "CHANNEL_LOCK", 0, szIniPath);
 
 	g_ConnectTimeOut = GetPrivateProfileIntA("OPTION", "CONNECT_TIMEOUT", 5, szIniPath);
 	g_UseMagicPacket = (BOOL)GetPrivateProfileIntA("OPTION", "USE_MAGICPACKET", 0, szIniPath);
@@ -406,13 +406,13 @@ void cProxyClient::makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2)
 	m_fifoSend.Push(p);
 }
 
-void cProxyClient::makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2, BOOL b)
+void cProxyClient::makePacket(enumCommand eCmd, DWORD dw1, DWORD dw2, BYTE b)
 {
 	cPacketHolder *p = new cPacketHolder(eCmd, (sizeof(DWORD) * 2) + sizeof(BYTE));
 	DWORD *pos = (DWORD *)(p->m_pPacket->payload);
 	*pos++ = ::htonl(dw1);
 	*pos++ = ::htonl(dw2);
-	*(BYTE *)pos = (BYTE)b;
+	*(BYTE *)pos = b;
 	m_fifoSend.Push(p);
 }
 
