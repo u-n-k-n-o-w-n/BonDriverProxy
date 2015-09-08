@@ -49,6 +49,7 @@ struct stTsReaderArg {
 	volatile BOOL ChannelChanged;
 	DWORD pos;
 	std::list<cProxyServer *> TsReceiversList;
+	std::list<cProxyServer *> WaitExclusivePrivList;
 	cCriticalSection TsLock;
 	stTsReaderArg()
 	{

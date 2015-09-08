@@ -212,6 +212,25 @@ cProxyServer::~cProxyServer()
 				++it;
 			}
 			m_pTsReaderArg->TsLock.Leave();
+
+			// このインスタンスはチャンネル排他権を持っているか？
+			if (m_bChannelLock == 0xff)
+			{
+				// 持っていた場合は、排他権取得待ちのインスタンスは存在しているか？
+				if (m_pTsReaderArg->WaitExclusivePrivList.size() > 0)
+				{
+					// 存在する場合は、リスト先頭のインスタンスに排他権を引き継ぎ、リストから削除
+					cProxyServer *p = m_pTsReaderArg->WaitExclusivePrivList.front();
+					m_pTsReaderArg->WaitExclusivePrivList.pop_front();
+					p->m_bChannelLock = 0xff;
+				}
+			}
+			else
+			{
+				// 持っていない場合は、排他権取得待ちリストに自身が含まれているかもしれないので削除
+				m_pTsReaderArg->WaitExclusivePrivList.remove(this);
+			}
+
 			// 可能性は低いがゼロではない…
 			if (m_pTsReaderArg->TsReceiversList.empty())
 			{
@@ -485,6 +504,25 @@ DWORD cProxyServer::Process()
 							++it;
 						}
 						m_pTsReaderArg->TsLock.Leave();
+
+						// このインスタンスはチャンネル排他権を持っているか？
+						if (m_bChannelLock == 0xff)
+						{
+							// 持っていた場合は、排他権取得待ちのインスタンスは存在しているか？
+							if (m_pTsReaderArg->WaitExclusivePrivList.size() > 0)
+							{
+								// 存在する場合は、リスト先頭のインスタンスに排他権を引き継ぎ、リストから削除
+								cProxyServer *p = m_pTsReaderArg->WaitExclusivePrivList.front();
+								m_pTsReaderArg->WaitExclusivePrivList.pop_front();
+								p->m_bChannelLock = 0xff;
+							}
+						}
+						else
+						{
+							// 持っていない場合は、排他権取得待ちリストに自身が含まれているかもしれないので削除
+							m_pTsReaderArg->WaitExclusivePrivList.remove(this);
+						}
+
 						// 可能性は低いがゼロではない…
 						if (m_pTsReaderArg->TsReceiversList.empty())
 						{
@@ -495,6 +533,7 @@ DWORD cProxyServer::Process()
 						}
 					}
 				}
+				m_bChannelLock = 0;
 				m_hTsRead = NULL;
 				m_pTsReaderArg = NULL;
 				m_bTunerOpen = FALSE;
@@ -572,6 +611,7 @@ DWORD cProxyServer::Process()
 				{
 					m_bChannelLock = pPh->m_pPacket->payload[sizeof(DWORD) * 2];
 					BOOL bLocked = FALSE;
+					cProxyServer *pHavePriv = NULL;
 					{
 #ifndef STRICT_LOCK
 						LOCK(g_Lock);
@@ -591,6 +631,7 @@ DWORD cProxyServer::Process()
 									// (そうしないと、優先度255のインスタンスもチャンネル変更できなくなる為)
 									m_bChannelLock = 0xfe;
 									bLocked = TRUE;
+									pHavePriv = *it;
 								}
 								if ((m_hTsRead == NULL) && ((*it)->m_hTsRead != NULL))
 								{
@@ -600,6 +641,37 @@ DWORD cProxyServer::Process()
 									m_pTsReaderArg->TsReceiversList.push_back(this);
 									m_pTsReaderArg->TsLock.Leave();
 								}
+							}
+						}
+						// このインスタンスの優先度が下げられた場合
+						if (pHavePriv != NULL)
+						{
+							if (m_hTsRead)
+							{
+								// 排他権取得待ちリストにまだ自身が含まれていなければ追加
+								BOOL bFind = FALSE;
+								std::list<cProxyServer *>::iterator it = m_pTsReaderArg->WaitExclusivePrivList.begin();
+								while (it != m_pTsReaderArg->WaitExclusivePrivList.end())
+								{
+									if (*it == this)
+									{
+										bFind = TRUE;
+										break;
+									}
+									++it;
+								}
+								if (!bFind)
+									m_pTsReaderArg->WaitExclusivePrivList.push_back(this);
+							}
+							else
+							{
+								// このインスタンスの優先度が下げられたが、排他権を持っているインスタンスへの配信が
+								// 開始されていない場合は、そのインスタンスから排他権を奪う
+								// こうする事が挙動として望ましいのかどうかは微妙だが、そもそもここに来るのは、
+								// 当該インスタンスでのSetChannel()の失敗後、何もせずに接続だけ続けている状態であり、
+								// 可能性としてはゼロではないものの、かなりのレアケースに限られるはず
+								pHavePriv->m_bChannelLock = 0;
+								m_bChannelLock = 0xff;
 							}
 						}
 					}
