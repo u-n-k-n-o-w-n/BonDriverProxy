@@ -419,12 +419,12 @@ void cBonDriverSplitter::PurgeTsStream(void)
 	if (!m_bTuner)
 		return;
 	m_bonLock.Enter();
+	m_writeLock.Enter();
 	if (m_pIBon2 != NULL)
 		m_pIBon2->PurgeTsStream();
-	m_bonLock.Leave();
-	m_writeLock.Enter();
 	TsFlush(g_UseServiceID);
 	m_writeLock.Leave();
+	m_bonLock.Leave();
 }
 
 void cBonDriverSplitter::Release(void)
@@ -605,22 +605,28 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 				m_pIBon2 = pIBon2;
 				::Sleep(10);	// for Windows PT1/2 SDK
 			}
-			if (m_pIBon2->SetChannel(g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel) == FALSE)
 			{
+				LOCK(m_writeLock);
+				if (m_pIBon2->SetChannel(g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel) == FALSE)
+				{
 #ifdef _DEBUG
-				n += ::wsprintfA(&buf[n], "    -> [FALSE] : m_pIBon2->SetChannel(%u, %u) error\n", g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel);
+					n += ::wsprintfA(&buf[n], "    -> [FALSE] : m_pIBon2->SetChannel(%u, %u) error\n", g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel);
 #else
-				::wsprintfA(dbgbuf, "*** m_pIBon2->SetChannel(%u, %u) error ***\n", g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel);
-				::OutputDebugStringA(dbgbuf);
+					::wsprintfA(dbgbuf, "*** m_pIBon2->SetChannel(%u, %u) error ***\n", g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel);
+					::OutputDebugStringA(dbgbuf);
 #endif
-				goto err0;
+					goto err0;
+				}
+				TsFlush(g_UseServiceID);
 			}
 		}
+		else
+		{
+			m_writeLock.Enter();
+			TsFlush(g_UseServiceID);
+			m_writeLock.Leave();
+		}
 	}
-
-	m_writeLock.Enter();
-	TsFlush(g_UseServiceID);
-	m_writeLock.Leave();
 
 	if (m_hTsRead == NULL)
 	{
