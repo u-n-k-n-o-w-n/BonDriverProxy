@@ -107,6 +107,11 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.6.2 (Sep/13/2015)
+	・サーバ側のTSパージ処理は実質不要なので簡素化した
+	・BonDriver_Splitterで、使用中BonDriverのPurgeTsStream()/SetChannel()/GetTsStream()の呼び出しを排他化した
+	  ＃読み込んだBonDriver内部での排他処理が適切に行われていない場合に備えての保険
+
 version 1.1.6.1 (Sep/09/2015)
 	・排他ロックの先行優先に関して、2番手以降の排他権の獲得順序を厳密に要求順にした
 
