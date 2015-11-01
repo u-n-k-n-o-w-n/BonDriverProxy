@@ -24,6 +24,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
+#define MAX_HOSTS	8	// listen()できるソケットの最大数
 static char g_Host[512];
 static char g_Port[8];
 static size_t g_PacketFifoSize;

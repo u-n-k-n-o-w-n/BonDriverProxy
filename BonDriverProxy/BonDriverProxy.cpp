@@ -1222,9 +1222,9 @@ static int Listen(char *host, char *port)
 {
 #endif
 	addrinfo hints, *results, *rp;
-	SOCKET lsock[8], csock;
+	SOCKET lsock[MAX_HOSTS], csock;
 	int i, j, nhost, len;
-	char *p, *hostbuf, *h[8];
+	char *p, *hostbuf, *h[MAX_HOSTS];
 	fd_set rd;
 	timeval tv;
 
@@ -1236,8 +1236,15 @@ static int Listen(char *host, char *port)
 	{
 		h[nhost++] = p;
 		if ((p = strchr(p, ',')) != NULL)
+		{
+			char *q = p - 1;
+			while (*q == ' ' || *q == '\t')
+				*q-- = '\0';
 			*p++ = '\0';
-		if (nhost >= 8)
+			while (*p == ' ' || *p == '\t')
+				*p++ = '\0';
+		}
+		if (nhost >= MAX_HOSTS)
 			break;
 	} while ((p != NULL) && (*p != '\0'));
 
