@@ -107,6 +107,9 @@ LICENSE.txt参照。
 May/31/2014 unknown <unknown_@live.jp>
 
 // 更新履歴
+version 1.1.6.3 (Nov/01/2015)
+	・サーバ側の待ち受けIPアドレスを複数指定可能(ただし最大8つまで)にした
+
 version 1.1.6.2 (Sep/13/2015)
 	・サーバ側のTSパージ処理は実質不要なので簡素化した
 	・BonDriver_Splitterで、使用中BonDriverのPurgeTsStream()/SetChannel()/GetTsStream()の呼び出しを排他化した
