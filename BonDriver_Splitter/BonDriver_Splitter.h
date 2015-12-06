@@ -40,6 +40,7 @@ struct stChannel {
 
 struct stSpace {
 	WCHAR SpaceName[MAX_SPACE_LEN];
+	BOOL bUseServiceID;
 	std::vector<stChannel> vstChannel;
 };
 
@@ -49,7 +50,6 @@ static std::vector<std::string> g_vBonDrivers;
 static std::vector<stSpace> g_vstSpace;
 static size_t g_TsFifoSize;
 static DWORD g_TsPacketBufSize;
-static BOOL g_UseServiceID;
 static DWORD g_Crc32Table[256];
 static BOOL g_ModPMT;
 static BOOL g_TsSync;
@@ -135,6 +135,7 @@ class cBonDriverSplitter : public IBonDriver2 {
 	cEvent m_eCloseTuner;
 	cCriticalSection m_bonLock;
 	cCriticalSection m_writeLock;
+	cCriticalSection m_splitterLock;
 	cTSFifo m_fifoTS;
 	cTSFifo m_fifoRawTS;
 	TS_DATA *m_LastBuf;
@@ -143,22 +144,26 @@ class cBonDriverSplitter : public IBonDriver2 {
 	DWORD m_dwSpace;
 	DWORD m_dwChannel;
 	DWORD m_dwServiceID;
+	BOOL m_bUseServiceID;
 	HANDLE m_hTsRead;
 	HANDLE m_hTsSplit;
 	volatile BOOL m_bStopTsRead;
 	volatile BOOL m_bChannelChanged;
 	DWORD m_dwPos;
+	DWORD m_dwSplitterPos;
 	cEvent m_StopTsSplit;
 	DWORD m_dwUnitSize;
 	DWORD m_dwSyncBufPos;
 	BYTE m_SyncBuf[256];
 
-	void TsFlush(BOOL bUseServiceID)
+	void TsFlush()
 	{
+		m_splitterLock.Enter();
 		m_fifoTS.Flush();
-		if (bUseServiceID)
-			m_fifoRawTS.Flush();
+		m_fifoRawTS.Flush();
 		m_dwPos = 0;
+		m_dwSplitterPos = 0;
+		m_splitterLock.Leave();
 	}
 	static DWORD WINAPI TsReader(LPVOID pv);
 	static DWORD WINAPI TsSplitter(LPVOID pv);

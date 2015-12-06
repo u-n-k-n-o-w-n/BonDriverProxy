@@ -41,7 +41,6 @@ static int Init(HMODULE hModule)
 	}
 	CloseHandle(hFile);
 
-	g_UseServiceID = GetPrivateProfileIntA("OPTION", "USESERVICEID", 1, szIniPath);
 	g_ModPMT = GetPrivateProfileIntA("OPTION", "MODPMT", 0, szIniPath);
 	g_TsSync = GetPrivateProfileIntA("OPTION", "TSSYNC", 0, szIniPath);
 	g_dwDelFlag = 0;
@@ -153,6 +152,7 @@ static int Init(HMODULE hModule)
 			OutputDebugStringA(dbgbuf);
 			return -5;
 		}
+		s.bUseServiceID = GetPrivateProfileIntA(section, "USESERVICEID", 1, szIniPath);
 		for (int j = 0; j < MAX_CH; j++)
 		{
 			key[0] = (char)('0' + (j / 100));
@@ -172,7 +172,7 @@ static int Init(HMODULE hModule)
 				{
 					*p++ = '\0';
 					cp[n++] = p;
-					if (g_UseServiceID)
+					if (s.bUseServiceID)
 					{
 						if (n > 4)
 						{
@@ -217,7 +217,7 @@ static int Init(HMODULE hModule)
 			c.BonNo = (int)dw;
 			c.BonSpace = strtoul(cp[2], NULL, 0);
 			c.BonChannel = strtoul(cp[3], NULL, 0);
-			if (g_UseServiceID)
+			if (s.bUseServiceID)
 				c.ServiceID = strtoul(cp[4], NULL, 0);
 			else
 				c.ServiceID = 0;
@@ -226,8 +226,7 @@ static int Init(HMODULE hModule)
 		g_vstSpace.push_back(s);
 	}
 
-	if (g_UseServiceID)
-		InitCrc32Table();
+	InitCrc32Table();
 
 #ifdef _DEBUG
 	for (size_t i = 0; i < g_vBonDrivers.size(); i++)
@@ -274,6 +273,7 @@ cBonDriverSplitter::cBonDriverSplitter() : m_eCloseTuner(TRUE, TRUE), m_StopTsSp
 	m_iBonNo = -1;
 	m_dwSpace = m_dwChannel = 0x7fffffff;	// INT_MAX
 	m_dwServiceID = 0xffffffff;
+	m_bUseServiceID = FALSE;
 	m_hTsRead = m_hTsSplit = NULL;
 	m_bStopTsRead = m_bChannelChanged = FALSE;
 }
@@ -291,7 +291,7 @@ cBonDriverSplitter::~cBonDriverSplitter()
 	m_bonLock.Leave();
 
 	m_writeLock.Enter();
-	TsFlush(g_UseServiceID);
+	TsFlush();
 	delete m_LastBuf;
 	m_writeLock.Leave();
 
@@ -422,7 +422,7 @@ void cBonDriverSplitter::PurgeTsStream(void)
 	m_writeLock.Enter();
 	if (m_pIBon2 != NULL)
 		m_pIBon2->PurgeTsStream();
-	TsFlush(g_UseServiceID);
+	TsFlush();
 	m_writeLock.Leave();
 	m_bonLock.Leave();
 }
@@ -479,45 +479,44 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 #ifdef _DEBUG
 		n += ::wsprintfA(&buf[n], "    -> [FALSE] : Tuner unopened\n");
 #endif
-		goto err1;
+		goto err2;
 	}
 	if (dwSpace >= g_vstSpace.size())
 	{
 #ifdef _DEBUG
 		n += ::wsprintfA(&buf[n], "    -> [FALSE] : dwSpace[%u] >= g_vstSpace.size()[%u]\n", dwSpace, (DWORD)g_vstSpace.size());
 #endif
-		goto err1;
+		goto err2;
 	}
 	if (dwChannel >= g_vstSpace[dwSpace].vstChannel.size())
 	{
 #ifdef _DEBUG
 		n += ::wsprintfA(&buf[n], "    -> [FALSE] : dwChannel[%u] >= vstChannel.size()[%u]\n", dwChannel, (DWORD)g_vstSpace[dwSpace].vstChannel.size());
 #endif
-		goto err1;
+		goto err2;
 	}
 
-	DWORD dwOldServiceID;
+	DWORD dwOldServiceID, dwOldSpace, dwOldChannel;
+	BOOL bOldUseServiceID;
 	{
 		LOCK(m_bonLock);
 		bLoad = FALSE;
 		if (g_vstSpace[dwSpace].vstChannel[dwChannel].BonNo != m_iBonNo)
 			bLoad = TRUE;
 
-		dwOldServiceID = m_dwServiceID;
 		bChange = TRUE;
-		if (g_UseServiceID)
+		if (!bLoad && m_dwSpace != 0x7fffffff/*&& m_dwChannel != 0x7fffffff*/)
 		{
-			if (!bLoad && m_dwSpace != 0x7fffffff/*&& m_dwChannel != 0x7fffffff*/)
+			if ((g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace == g_vstSpace[m_dwSpace].vstChannel[m_dwChannel].BonSpace) &&
+				(g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel == g_vstSpace[m_dwSpace].vstChannel[m_dwChannel].BonChannel))
 			{
-				if ((g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace == g_vstSpace[m_dwSpace].vstChannel[m_dwChannel].BonSpace) &&
-					(g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel == g_vstSpace[m_dwSpace].vstChannel[m_dwChannel].BonChannel))
-				{
-					bChange = FALSE;
-				}
+				bChange = FALSE;
 			}
-			m_bChannelChanged = TRUE;
-			m_dwServiceID = g_vstSpace[dwSpace].vstChannel[dwChannel].ServiceID;
 		}
+
+		m_bChannelChanged = TRUE;
+		dwOldServiceID = m_dwServiceID;
+		m_dwServiceID = g_vstSpace[dwSpace].vstChannel[dwChannel].ServiceID;
 
 #ifdef _DEBUG
 		n += ::wsprintfA(&buf[n], "    bChange[%s] bLoad[%s] BonNo[%d] BonSpace[%u] BonChannel[%u]\n",
@@ -564,7 +563,7 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 					::wsprintfA(dbgbuf, "*** LoadLibrary(\"%s\") error ***\n", g_vBonDrivers[iBonNo].c_str());
 					::OutputDebugStringA(dbgbuf);
 #endif
-					goto err0;
+					goto err1;
 				}
 				IBonDriver *pIBon = NULL;
 				IBonDriver2 *pIBon2 = NULL;
@@ -586,7 +585,7 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 					if (pIBon)
 						pIBon->Release();
 					::FreeLibrary(hModule);
-					goto err0;
+					goto err1;
 				}
 				if (pIBon->OpenTuner() == FALSE)
 				{
@@ -598,7 +597,7 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 #endif
 					pIBon->Release();
 					::FreeLibrary(hModule);
-					goto err0;
+					goto err1;
 				}
 				m_iBonNo = iBonNo;
 				m_hBonModule = hModule;
@@ -615,15 +614,27 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 					::wsprintfA(dbgbuf, "*** m_pIBon2->SetChannel(%u, %u) error ***\n", g_vstSpace[dwSpace].vstChannel[dwChannel].BonSpace, g_vstSpace[dwSpace].vstChannel[dwChannel].BonChannel);
 					::OutputDebugStringA(dbgbuf);
 #endif
-					goto err0;
+					goto err1;
 				}
-				TsFlush(g_UseServiceID);
+				TsFlush();
+				dwOldSpace = m_dwSpace;
+				m_dwSpace = dwSpace;
+				dwOldChannel = m_dwChannel;
+				m_dwChannel = dwChannel;
+				bOldUseServiceID = m_bUseServiceID;
+				m_bUseServiceID = g_vstSpace[dwSpace].bUseServiceID;
 			}
 		}
 		else
 		{
 			m_writeLock.Enter();
-			TsFlush(g_UseServiceID);
+			TsFlush();
+			dwOldSpace = m_dwSpace;
+			m_dwSpace = dwSpace;
+			dwOldChannel = m_dwChannel;
+			m_dwChannel = dwChannel;
+			bOldUseServiceID = m_bUseServiceID;
+			m_bUseServiceID = g_vstSpace[dwSpace].bUseServiceID;
 			m_writeLock.Leave();
 		}
 	}
@@ -640,17 +651,20 @@ const BOOL cBonDriverSplitter::SetChannel(const DWORD dwSpace, const DWORD dwCha
 			goto err0;
 		}
 	}
-	m_dwSpace = dwSpace;
-	m_dwChannel = dwChannel;
 #ifdef _DEBUG
 	n += ::wsprintfA(&buf[n], "    -> [TRUE] : ok\n");
 	_RPT1(_CRT_WARN, "%s", buf);
 #endif
 	return TRUE;
+
 err0:
+	m_dwSpace = dwOldSpace;
+	m_dwChannel = dwOldChannel;
+	m_bUseServiceID = bOldUseServiceID;
+err1:
 	m_bChannelChanged = FALSE;
 	m_dwServiceID = dwOldServiceID;
-err1:
+err2:
 #ifdef _DEBUG
 	_RPT1(_CRT_WARN, "%s", buf);
 #endif
@@ -675,12 +689,9 @@ DWORD WINAPI cBonDriverSplitter::TsReader(LPVOID pv)
 	const DWORD TsPacketBufSize = g_TsPacketBufSize;
 	BYTE *pBuf, *pTsBuf = new BYTE[TsPacketBufSize];
 
-	if (g_UseServiceID)
-	{
-		pThis->m_hTsSplit = ::CreateThread(NULL, 0, TsSplitter, pThis, 0, NULL);
-		if (pThis->m_hTsSplit == NULL)
-			return 100;
-	}
+	pThis->m_hTsSplit = ::CreateThread(NULL, 0, TsSplitter, pThis, 0, NULL);
+	if (pThis->m_hTsSplit == NULL)
+		return 100;
 
 	pos = 0;
 	// 内部でCOMを使用しているBonDriverに対する対策
@@ -704,7 +715,7 @@ DWORD WINAPI cBonDriverSplitter::TsReader(LPVOID pv)
 				::memcpy(&pTsBuf[pos], pBuf, dwLen);
 
 				pData = new TS_DATA(pTsBuf, TsPacketBufSize);
-				if (g_UseServiceID)
+				if (pThis->m_bUseServiceID)
 					pThis->m_fifoRawTS.Push(pData);
 				else
 					pThis->m_fifoTS.Push(pData);
@@ -718,7 +729,7 @@ DWORD WINAPI cBonDriverSplitter::TsReader(LPVOID pv)
 					::memcpy(pTsBuf, pBuf, TsPacketBufSize);
 
 					pData = new TS_DATA(pTsBuf, TsPacketBufSize);
-					if (g_UseServiceID)
+					if (pThis->m_bUseServiceID)
 						pThis->m_fifoRawTS.Push(pData);
 					else
 						pThis->m_fifoTS.Push(pData);
@@ -740,14 +751,11 @@ DWORD WINAPI cBonDriverSplitter::TsReader(LPVOID pv)
 		::CoUninitialize();
 	delete[] pTsBuf;
 
-	if (g_UseServiceID)
-	{
-		pThis->m_StopTsSplit.Set();
-		::WaitForSingleObject(pThis->m_hTsSplit, INFINITE);
-		::CloseHandle(pThis->m_hTsSplit);
-		pThis->m_hTsSplit = NULL;
-		pThis->m_StopTsSplit.Reset();
-	}
+	pThis->m_StopTsSplit.Set();
+	::WaitForSingleObject(pThis->m_hTsSplit, INFINITE);
+	::CloseHandle(pThis->m_hTsSplit);
+	pThis->m_hTsSplit = NULL;
+	pThis->m_StopTsSplit.Reset();
 
 	return 0;
 }
@@ -781,7 +789,7 @@ DWORD WINAPI cBonDriverSplitter::TsSplitter(LPVOID pv)
 	BYTE *pTsBuf, pPAT[TS_PKTSIZE];
 	BYTE pPMT[4104 + TS_PKTSIZE];	// 4104 = 8(TSヘッダ + pointer_field + table_idからsection_length) + 4096(セクション長最大値)
 	BYTE pPMTPackets[TS_PKTSIZE * 32];
-	DWORD pos;
+	DWORD &pos = pThis->m_dwSplitterPos;
 	int iNumSplit;
 	unsigned char pat_ci, rpmt_ci, wpmt_ci, lpmt_version, lcat_version, ver;
 	unsigned short ltsid, pidPMT, pidEMM, pmt_tail;
@@ -812,6 +820,7 @@ DWORD WINAPI cBonDriverSplitter::TsSplitter(LPVOID pv)
 
 		case WAIT_OBJECT_0 + 1:
 		{
+			LOCK(pThis->m_splitterLock);
 			TS_DATA *pRawBuf = NULL;
 			pThis->m_fifoRawTS.Pop(&pRawBuf);
 			if (pRawBuf == NULL)	// イベントのトリガからPop()までの間に別スレッドにFlush()される可能性はゼロではない
@@ -1255,7 +1264,7 @@ DWORD WINAPI cBonDriverSplitter::TsSplitter(LPVOID pv)
 						{
 							// TSヘッダを除いた残りデータサイズ
 							// 4 = pointer_fieldの1バイト + 上のと同じ3バイト
-							int left = 4 + len;
+							left = 4 + len;
 							// このPMTをいくつのTSパケットに分割する必要があるか
 							iNumSplit = ((left - 1) / (TS_PKTSIZE - 4)) + 1;
 							::memset(pPMTPackets, 0xff, (TS_PKTSIZE * iNumSplit));
