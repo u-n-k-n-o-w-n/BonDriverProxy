@@ -90,6 +90,14 @@ static int Init(HMODULE hModule)
 	else
 		g_ThreadPrioritySender = THREAD_PRIORITY_NORMAL;
 
+	OSVERSIONINFOEXA osvi = {};
+	osvi.dwOSVersionInfoSize = sizeof(osvi);
+	osvi.dwMajorVersion = 6;	// >= Vista
+	if (VerifyVersionInfoA(&osvi, VER_MAJORVERSION, VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL)))
+		g_ThreadExecutionState = ES_SYSTEM_REQUIRED | ES_CONTINUOUS | ES_AWAYMODE_REQUIRED;
+	else
+		g_ThreadExecutionState = ES_SYSTEM_REQUIRED | ES_CONTINUOUS;
+
 	return 0;
 }
 
@@ -253,12 +261,18 @@ DWORD WINAPI cProxyServer::Reception(LPVOID pv)
 	// 内部でCOMを使用しているBonDriverに対する対策
 	HRESULT hr = ::CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE | COINIT_SPEED_OVER_MEMORY);
 
+	// 接続クライアントがいる間はスリープ抑止
+	EXECUTION_STATE es = ::SetThreadExecutionState(g_ThreadExecutionState);
+
 	DWORD ret = pProxy->Process();
 	delete pProxy;
 
 #ifdef HAVE_UI
 	::InvalidateRect(g_hWnd, NULL, TRUE);
 #endif
+
+	if (es != NULL)
+		::SetThreadExecutionState(es);
 
 	if (SUCCEEDED(hr))
 		::CoUninitialize();

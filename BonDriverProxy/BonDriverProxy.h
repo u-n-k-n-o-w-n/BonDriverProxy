@@ -34,6 +34,7 @@ static BOOL g_DisableUnloadBonDriver;
 static DWORD g_ProcessPriority;
 static int g_ThreadPriorityTsReader;
 static int g_ThreadPrioritySender;
+static EXECUTION_STATE g_ThreadExecutionState;
 struct stLoadedDriver {
 	char strBonDriver[MAX_PATH];
 	HMODULE hModule;
