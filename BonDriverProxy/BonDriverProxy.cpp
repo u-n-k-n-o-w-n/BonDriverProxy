@@ -776,6 +776,97 @@ DWORD cProxyServer::Process()
 				break;
 			}
 
+			case eGetClientInfo:
+			{
+				union {
+					SOCKADDR_STORAGE ss;
+					SOCKADDR_IN si4;
+					SOCKADDR_IN6 si6;
+				};
+				char addr[INET6_ADDRSTRLEN], buf[512], info[1024], *p, *exinfo;
+				int port, len, num = 0;
+				size_t left, size;
+				p = info;
+				p[0] = '\0';
+				left = size = sizeof(info);
+				exinfo = NULL;
+				std::list<cProxyServer *>::iterator it = g_InstanceList.begin();
+				while (it != g_InstanceList.end())
+				{
+					len = sizeof(ss);
+					if (::getpeername((*it)->m_s, (SOCKADDR *)&ss, &len) == 0)
+					{
+						if (ss.ss_family == AF_INET)
+						{
+							// IPv4
+#ifdef _WIN64
+							::inet_ntop(AF_INET, &(si4.sin_addr), addr, sizeof(addr));
+#else
+							::lstrcpyA(addr, ::inet_ntoa(si4.sin_addr));
+#endif
+							port = ::ntohs(si4.sin_port);
+						}
+						else
+						{
+							// IPv6
+#ifdef _WIN64
+							::inet_ntop(AF_INET6, &(si6.sin6_addr), addr, sizeof(addr));
+#else
+							char *cp = addr;
+							for (int i = 0; i < 16; i += 2)
+								cp += ::wsprintfA(cp, "%02x%02x%c", si6.sin6_addr.s6_addr[i], si6.sin6_addr.s6_addr[i + 1], (i != 14) ? ':' : '\0');
+#endif
+							port = ::ntohs(si6.sin6_port);
+						}
+					}
+					else
+					{
+						::lstrcpyA(addr, "unknown host...");
+						port = 0;
+					}
+					len = ::wsprintfA(buf, "%02d: [%s]:[%d] / [%s]\n", num, addr, port, (*it)->m_strBonDriver);
+					if ((size_t)len >= left)
+					{
+						left += size;
+						size *= 2;
+						if (exinfo != NULL)
+						{
+							char *bp = exinfo;
+							exinfo = new char[size];
+							::lstrcpyA(exinfo, bp);
+							delete[] bp;
+						}
+						else
+						{
+							exinfo = new char[size];
+							::lstrcpyA(exinfo, info);
+						}
+						p = exinfo + ::lstrlenA(exinfo);
+					}
+					::lstrcpyA(p, buf);
+					p += len;
+					left -= len;
+					num++;
+					++it;
+				}
+				if (exinfo != NULL)
+				{
+					size = (p - exinfo) + 1;
+					p = exinfo;
+				}
+				else
+				{
+					size = (p - info) + 1;
+					p = info;
+				}
+				cPacketHolder *ph = new cPacketHolder(eGetClientInfo, size);
+				::memcpy(ph->m_pPacket->payload, p, size);
+				m_fifoSend.Push(ph);
+				if (exinfo != NULL)
+					delete[] exinfo;
+				break;
+			}
+
 			default:
 				break;
 			}
@@ -1415,7 +1506,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		HDC hDc = BeginPaint(hWnd, &ps);
 		TEXTMETRIC tm;
 		GetTextMetrics(hDc, &tm);
-		SOCKADDR_STORAGE ss;
+		union {
+			SOCKADDR_STORAGE ss;
+			SOCKADDR_IN si4;
+			SOCKADDR_IN6 si6;
+		};
 		char addr[INET6_ADDRSTRLEN];
 		int port, len, num = 0;
 		char buf[512];
@@ -1429,26 +1524,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 				if (ss.ss_family == AF_INET)
 				{
 					// IPv4
-					SOCKADDR_IN *p4 = (SOCKADDR_IN *)&ss;
 #ifdef _WIN64
-					inet_ntop(AF_INET, &(p4->sin_addr), addr, sizeof(addr));
+					inet_ntop(AF_INET, &(si4.sin_addr), addr, sizeof(addr));
 #else
-					lstrcpyA(addr, inet_ntoa(p4->sin_addr));
+					lstrcpyA(addr, inet_ntoa(si4.sin_addr));
 #endif
-					port = ntohs(p4->sin_port);
+					port = ntohs(si4.sin_port);
 				}
 				else
 				{
 					// IPv6
-					SOCKADDR_IN6 *p6 = (SOCKADDR_IN6 *)&ss;
 #ifdef _WIN64
-					inet_ntop(AF_INET6, &(p6->sin6_addr), addr, sizeof(addr));
+					inet_ntop(AF_INET6, &(si6.sin6_addr), addr, sizeof(addr));
 #else
 					char *p = addr;
 					for (int i = 0; i < 16; i += 2)
-						p += wsprintfA(p, "%02x%02x%c", p6->sin6_addr.s6_addr[i], p6->sin6_addr.s6_addr[i + 1], (i != 14) ? ':' : '\0');
+						p += wsprintfA(p, "%02x%02x%c", si6.sin6_addr.s6_addr[i], si6.sin6_addr.s6_addr[i + 1], (i != 14) ? ':' : '\0');
 #endif
-					port = ntohs(p6->sin6_port);
+					port = ntohs(si6.sin6_port);
 				}
 			}
 			else

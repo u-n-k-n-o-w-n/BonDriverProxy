@@ -25,6 +25,8 @@ enum enumCommand {
 	eGetTotalDeviceNum,
 	eGetActiveDeviceNum,
 	eSetLnbPower,
+
+	eGetClientInfo,
 };
 
 #pragma pack(push, 1)
