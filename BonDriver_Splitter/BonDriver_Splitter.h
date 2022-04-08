@@ -5,6 +5,7 @@
 #include <process.h>
 #include <queue>
 #include <vector>
+#include <string>
 #include "Common.h"
 #include "IBonDriver2.h"
 

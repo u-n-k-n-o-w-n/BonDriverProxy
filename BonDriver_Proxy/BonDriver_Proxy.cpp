@@ -1,9 +1,16 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include "BonDriver_Proxy.h"
+#include <assert.h>
 
 #if _DEBUG
 #define DETAILLOG	0
 #endif
+
+typedef enum enumWakeupMode {
+	MagicPacket = 0,
+	PatternMatch,
+} WakeupMode;
+static BOOL WakeupRemoteComputer(const char* host, WakeupMode mode, UINT repeat = 1);
 
 static int Init(HMODULE hModule)
 {
@@ -26,7 +33,8 @@ static int Init(HMODULE hModule)
 	g_ChannelLock = (BYTE)GetPrivateProfileIntA("OPTION", "CHANNEL_LOCK", 0, szIniPath);
 
 	g_ConnectTimeOut = GetPrivateProfileIntA("OPTION", "CONNECT_TIMEOUT", 5, szIniPath);
-	g_UseMagicPacket = (BOOL)GetPrivateProfileIntA("OPTION", "USE_MAGICPACKET", 0, szIniPath);
+	g_UseMagicPacket = (UINT)min(GetPrivateProfileIntA("OPTION", "USE_MAGICPACKET", 0, szIniPath), 100);
+	g_UsePatternMatch = (UINT)min(GetPrivateProfileIntA("OPTION", "USE_PATTERNMATCH", 0, szIniPath), 100);
 	if (g_UseMagicPacket)
 	{
 		char mac[32];
@@ -781,47 +789,12 @@ static SOCKET Connect(char *host, char *port)
 	timeval tv;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
 	if (g_UseMagicPacket)
-	{
-		char sendbuf[128];
-		memset(sendbuf, 0xff, 6);
-		for (i = 1; i <= 16; i++)
-			memcpy(&sendbuf[i * 6], g_TargetMac, 6);
+		WakeupRemoteComputer(g_TargetHost, MagicPacket, g_UseMagicPacket);
+	if (g_UsePatternMatch)
+		WakeupRemoteComputer(host, PatternMatch, g_UsePatternMatch);
 
-		hints.ai_socktype = SOCK_DGRAM;
-		hints.ai_protocol = IPPROTO_UDP;
-		hints.ai_flags = AI_NUMERICHOST;
-		if (getaddrinfo(g_TargetHost, g_TargetPort, &hints, &results) != 0)
-		{
-			hints.ai_flags = 0;
-			if (getaddrinfo(g_TargetHost, g_TargetPort, &hints, &results) != 0)
-				return INVALID_SOCKET;
-		}
-
-		for (rp = results; rp != NULL; rp = rp->ai_next)
-		{
-			sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-			if (sock == INVALID_SOCKET)
-				continue;
-
-			BOOL opt = TRUE;
-			if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&opt, sizeof(opt)) != 0)
-			{
-				closesocket(sock);
-				continue;
-			}
-
-			int ret = sendto(sock, sendbuf, 102, 0, rp->ai_addr, (int)(rp->ai_addrlen));
-			closesocket(sock);
-			if (ret == 102)
-				break;
-		}
-		freeaddrinfo(results);
-		if (rp == NULL)
-			return INVALID_SOCKET;
-	}
-
+	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
 	hints.ai_flags = AI_NUMERICHOST;
@@ -962,3 +935,113 @@ BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID/*lpvReserved*/
 	}
 	return TRUE;
 }
+
+static BOOL WakeupRemoteComputer(const char* host, WakeupMode mode, UINT repeat/*=1*/)
+{
+	addrinfo hints, *results, *rp;
+	SOCKET sock;
+	int i;
+	BOOL result = FALSE;
+	unsigned long bf;
+
+	rp = NULL;
+	memset(&hints, 0, sizeof(hints));
+	try
+	{
+		switch (mode)
+		{
+			case MagicPacket:
+				char sendbuf[128];
+				memset(sendbuf, 0xff, 6);
+				for (i = 1; i <= 16; i++)
+					memcpy(&sendbuf[i * 6], g_TargetMac, 6);
+
+				hints.ai_family = AF_INET;
+				hints.ai_socktype = SOCK_DGRAM;
+				hints.ai_protocol = IPPROTO_UDP;
+				hints.ai_flags = AI_V4MAPPED | AI_NUMERICHOST;
+				if (getaddrinfo(g_TargetHost, g_TargetPort, &hints, &results) != 0)
+				{
+					hints.ai_flags = AI_V4MAPPED;
+					if (getaddrinfo(g_TargetHost, g_TargetPort, &hints, &results) != 0)
+						throw __LINE__;
+				}
+
+				for (UINT j = 1; j <= repeat; j++)
+				{
+					for (rp = results; rp != NULL; rp = rp->ai_next)
+					{
+						sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+						if (sock == INVALID_SOCKET)
+							continue;
+
+						BOOL opt = TRUE;
+						if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&opt, sizeof(opt)) != 0)
+						{
+							closesocket(sock);
+							continue;
+						}
+
+						int ret = sendto(sock, sendbuf, 102, 0, rp->ai_addr, (int)(rp->ai_addrlen));
+						closesocket(sock);
+						if (ret == 102)
+							break;
+					}
+					if (j < repeat)
+						::Sleep(10);
+				}
+				break;
+
+			case PatternMatch:
+				hints.ai_family = AF_UNSPEC;
+				hints.ai_socktype = SOCK_STREAM;
+				hints.ai_protocol = IPPROTO_TCP;
+				hints.ai_flags = AI_NUMERICHOST;
+
+				sock = INVALID_SOCKET;
+				if (getaddrinfo(host, "445", &hints, &results) != 0)
+				{
+					hints.ai_flags = 0;
+					if (getaddrinfo(host, "445", &hints, &results) != 0)
+						throw __LINE__;
+				}
+
+				for (UINT j = 1; j <= repeat; j++)
+				{
+					for (rp = results; rp != NULL; rp = rp->ai_next)
+					{
+						sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+						if (sock == INVALID_SOCKET)
+							continue;
+						if (connect(sock, rp->ai_addr, (int)(rp->ai_addrlen)) == SOCKET_ERROR)
+							continue;
+						if (shutdown(sock, SD_BOTH) == SOCKET_ERROR)
+							continue;
+						if (sock != INVALID_SOCKET)
+							closesocket(sock);
+					}
+					if (j < repeat)
+						::Sleep(10);
+				}
+				break;
+
+			default:
+				assert(FALSE);
+				throw __LINE__;
+		}
+
+		freeaddrinfo(results);
+		if (rp == NULL)
+			throw __LINE__;
+
+		result = TRUE;
+	}
+	catch (const int &e) {
+		e;
+#if _DEBUG
+#endif
+		result = FALSE;
+	}
+	return result;
+}
+
